@@ -5,9 +5,34 @@
 **Self-hosted personal AI assistant — installed in one command.**
 **自托管个人 AI 助手 — 一行命令搞定。**
 
-[Live Tutorial Site](https://openclaw.ai) · [Quickstart](#-quickstart) · [For Agents](#-for-agents) · [中文](#中文)
+[🌐 Live Tutorial Site](https://doraemonlyz-jpg.github.io/openclaw-setup-guide/) · [Quickstart](#-quickstart) · [For Agents](#-for-agents) · [中文](#中文)
 
 </div>
+
+---
+
+## 💬 Telling another AI to install this for you / 给另一个 Agent 用的指令
+
+Copy-paste this into Claude / Cursor / Codex / any coding agent:
+
+> Install OpenClaw on this machine. First fetch
+> <https://doraemonlyz-jpg.github.io/openclaw-setup-guide/llms.txt> to learn the
+> spec, then run:
+> ```
+> curl -fsSL https://raw.githubusercontent.com/doraemonlyz-jpg/openclaw-setup-guide/main/quickstart.sh | bash
+> ```
+> Defaults to local Ollama + qwen3:8b + WebChat. Read AGENTS.md for the full
+> error→fix matrix if anything breaks.
+
+中文版 — 复制给任意 coding agent：
+
+> 帮我在这台机器装 OpenClaw 个人 AI 助手。先 fetch
+> <https://doraemonlyz-jpg.github.io/openclaw-setup-guide/llms.txt> 了解规格，
+> 然后跑：
+> ```
+> curl -fsSL https://raw.githubusercontent.com/doraemonlyz-jpg/openclaw-setup-guide/main/quickstart.sh | bash
+> ```
+> 默认本地 Ollama + qwen3:8b + WebChat。出错查 AGENTS.md 的 "Common errors → fixes" 表。
 
 ---
 
@@ -80,6 +105,40 @@ When adding a model/channel:
 2. Add a section to [`docs/tutorial.html`](docs/tutorial.html)
 3. If it changes default install behaviour, update [`quickstart.sh`](quickstart.sh)
 
+## 🛠 Maintenance cheat sheet / 维护小抄
+
+```bash
+# Edit any file, then commit + push — GitHub Actions auto-redeploys the site
+git add -A
+git commit -m "your message"
+git push
+
+# Watch the deploy
+gh run list -R doraemonlyz-jpg/openclaw-setup-guide --limit 3
+gh run watch <run-id>
+
+# Local preview (no build step needed — pure static HTML/CSS/JS)
+cd docs && python3 -m http.server 8000
+# → http://127.0.0.1:8000
+
+# Adding a new model provider:
+#   1. Add a row to AGENTS.md "Models reference" table
+#   2. Add a row to docs/index.html "providers" table
+#   3. Add a case branch to quickstart.sh
+#   4. Update llms.txt "Quick recipe" if it changes the default
+
+# Adding a new chat channel:
+#   1. Add a section to AGENTS.md "Channels reference"
+#   2. Add a card to docs/index.html "channel-grid"
+
+# Fixing a translation:
+#   - Bilingual text uses data-i18n="key" in docs/index.html
+#   - Translations live in docs/app.js → const I18N = { zh: {...}, en: {...} }
+#   - Add the same key to BOTH zh and en blocks
+```
+
+The Pages workflow auto-replaces `REPLACE_OWNER` and `openclaw-setup-guide` placeholders with the actual repo owner/name at deploy time, so forks "just work" without editing anything. 部署时会自动替换占位符，fork 后无需手动改任何东西。
+
 ## 📜 License
 
 MIT — see [LICENSE](LICENSE).
@@ -127,6 +186,23 @@ curl -fsSL https://raw.githubusercontent.com/doraemonlyz-jpg/openclaw-setup-guid
 ### 🛠 手动安装
 
 完整的中英双语教程在 [**网站版本**](https://doraemonlyz-jpg.github.io/openclaw-setup-guide/)，里面每条命令都有"复制"按钮，且支持中英切换。
+
+### 🔧 维护小抄
+
+```bash
+# 改完任何文件 → commit + push，GitHub Actions 自动重新部署
+git add -A && git commit -m "msg" && git push
+
+# 看部署进度
+gh run list -R doraemonlyz-jpg/openclaw-setup-guide --limit 3
+
+# 本地预览（纯静态，不用 build）
+cd docs && python3 -m http.server 8000   # → http://127.0.0.1:8000
+
+# 加新 model：1) AGENTS.md 表格 2) docs/index.html 表格 3) quickstart.sh case
+# 加新 channel：1) AGENTS.md "Channels reference" 2) docs/index.html "channel-grid"
+# 改翻译：docs/index.html 用 data-i18n="key"，docs/app.js 的 I18N.{zh,en} 都要加
+```
 
 ### 📜 协议
 
