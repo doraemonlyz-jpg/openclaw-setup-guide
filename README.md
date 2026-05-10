@@ -5,7 +5,7 @@
 **Self-hosted personal AI assistant — installed in one command.**
 **自托管个人 AI 助手 — 一行命令搞定。**
 
-[🌐 Live Tutorial Site](https://doraemonlyz-jpg.github.io/openclaw-setup-guide/) · [Quickstart](#-quickstart) · [For Agents](#-for-agents) · [中文](#中文)
+[🌐 Live Tutorial Site](https://doraemonlyz-jpg.github.io/openclaw-setup-guide/) · [Quickstart](#-quickstart) · [For Agents](#-for-agents) · [AI Company](docs/company.md) · [中文](#中文)
 
 </div>
 
@@ -94,6 +94,22 @@ This guide collapses that into one idempotent script + one command-only spec.
 ## 🛠 Manual install (if you want to read what's happening)
 
 See the **[full tutorial site](https://doraemonlyz-jpg.github.io/openclaw-setup-guide/)** for a step-by-step walkthrough with copyable commands, or read the source: [`docs/tutorial.html`](docs/tutorial.html).
+
+## 🏢 Build a multi-agent AI software studio (advanced)
+
+Once OpenClaw is installed, you can layer an **8-agent local-only software studio** on top: PM, Tech Lead, two Engineers, QA, DevOps, Designer, Tech Writer. You give the boss request in plain English, the company tries to build it.
+
+```bash
+# After running quickstart.sh
+curl -fsSL https://raw.githubusercontent.com/doraemonlyz-jpg/openclaw-setup-guide/main/setup-company.sh | bash
+
+# Then talk to your PM
+openclaw agent --agent pm --message "Build me a tiny pomodoro CLI in Python. Path: ~/.openclaw/company/projects/pomodoro/"
+```
+
+Read the design + caveats: [**docs/company.md**](docs/company.md). Local 8B-14B models are **not** drop-in replacements for Claude/GPT-5 at orchestration — read the caveats first.
+
+中文：用同样的方式，OpenClaw 自带的多 agent 能力可以搭一个"本地小公司"——PM + 技术负责人 + 两个工程师 + QA + DevOps + 设计 + 文档作者 8 个角色。详见 [docs/company.md](docs/company.md) 的"诚实预期"章节再决定上不上。
 
 ## 🤝 Contributing
 
