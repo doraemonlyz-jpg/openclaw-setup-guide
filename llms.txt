@@ -1,0 +1,60 @@
+# OpenClaw Setup Guide
+
+> A token-efficient, copy-pasteable guide for installing the **OpenClaw** personal AI assistant (https://openclaw.ai) on macOS, Linux, or Windows (WSL2). Optimized for both human readers and coding agents.
+
+OpenClaw is a self-hosted, local-first personal AI assistant. It runs as a Gateway daemon (WebSocket control plane) and can be reached through chat channels (WhatsApp, Telegram, Slack, Discord, iMessage, Feishu, WeChat, WebChat, etc.) or directly via CLI / browser.
+
+This repository documents one verified end-to-end setup path (Ollama + qwen3:8b + WebChat on macOS Apple Silicon) plus extensions for other models and channels.
+
+## Critical agent context
+
+- The Gateway is started as a **launchd / systemd / Windows service** by `openclaw onboard --install-daemon`. Restarting requires `launchctl kickstart -k gui/$UID/ai.openclaw.gateway` (macOS) or `systemctl --user restart openclaw-gateway` (Linux).
+- **`onboard --non-interactive --accept-risk`** is the only way to script setup. Both flags are required together.
+- Provider authentication is per-agent. Even local providers (Ollama / LM Studio) need a placeholder secret (`OLLAMA_API_KEY=any-value`) registered through env or auth-profiles.
+- The Gateway service reads env from `~/.openclaw/service-env/ai.openclaw.gateway.env` (macOS) — modify there, not in shell.
+- CLI cannot use `--model` to override unless caller is authorized; configure default model via `openclaw models set <provider>/<model>` instead.
+- Sessions are sticky to the model that created them. After changing the default model, reset sessions by truncating `~/.openclaw/agents/main/sessions/sessions.json` to `{}`.
+
+## Files for agents
+
+- [quickstart.sh](quickstart.sh): Idempotent one-shot installer. Reads `OPENCLAW_MODEL` (default `ollama/qwen3:8b`) and `OPENCLAW_PROVIDER` env vars. Run with `bash quickstart.sh`.
+- [AGENTS.md](AGENTS.md): Full command-only walkthrough with troubleshooting matrix. The single most important file for an agent.
+- [README.md](README.md): Bilingual (zh/en) overview for humans landing on the GitHub repo.
+- [docs/](docs/): Static website source (deployed to GitHub Pages).
+
+## Quick recipe (most common path)
+
+```bash
+# 1. Install OpenClaw CLI (Node 22.16+ required; Node 24 recommended)
+npm install -g openclaw@latest
+
+# 2. Bootstrap workspace + install Gateway daemon (no model/channel yet)
+openclaw onboard --non-interactive --accept-risk \
+  --install-daemon --auth-choice skip \
+  --skip-channels --skip-skills --skip-search --skip-ui
+
+# 3. Install local model runtime (macOS example)
+brew install ollama && brew services start ollama
+ollama pull qwen3:8b
+
+# 4. Wire Ollama into OpenClaw
+openclaw models set "ollama/qwen3:8b"
+echo "export OLLAMA_API_KEY='local'" >> ~/.openclaw/service-env/ai.openclaw.gateway.env
+launchctl kickstart -k gui/$UID/ai.openclaw.gateway
+
+# 5. Verify
+openclaw agent --agent main --message "ping" --thinking off
+# Open http://127.0.0.1:18789/webchat (token in ~/.openclaw/openclaw.json gateway.auth.token)
+```
+
+## Models & channels reference
+
+- Models: see [AGENTS.md#models-reference](AGENTS.md#models-reference) for OpenAI / Anthropic / DeepSeek / Moonshot / Qwen / VolcEngine / Ollama / LM Studio.
+- Channels: see [AGENTS.md#channels-reference](AGENTS.md#channels-reference) for Telegram / Discord / Slack / Feishu / WeChat / iMessage / WebChat.
+
+## Common pitfalls (with fixes)
+
+- `No API key found for provider openai` after switching to Ollama → reset sessions: `echo '{}' > ~/.openclaw/agents/main/sessions/sessions.json` then restart Gateway.
+- `Unknown model: ollama/...` → register Ollama auth: `echo "export OLLAMA_API_KEY='local'" >> ~/.openclaw/service-env/ai.openclaw.gateway.env` and restart.
+- `provider/model overrides are not authorized for this caller` → don't pass `--model` on the CLI; set default model instead.
+- WeChat plugin needs the **ClawBot** plugin in the user's WeChat (Tencent's gradual rollout). If unavailable, fall back to WebChat / Telegram.
