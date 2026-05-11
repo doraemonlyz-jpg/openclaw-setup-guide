@@ -74,8 +74,6 @@ async function refreshAgents() {
 }
 
 // ──────── projects ────────
-let lastProjectPhases = {}; // slug -> phase, used for completion detection in refreshProjects
-
 async function refreshProjects() {
   try {
     const r = await fetch("/api/projects");
@@ -83,19 +81,29 @@ async function refreshProjects() {
     const list = $("#projects-list");
     list.innerHTML = "";
     for (const p of d.projects) {
-      const phase = (lastRunStatus[p.slug] || {}).phase || "?";
+      const status = lastRunStatus[p.slug] || {};
+      const phase = status.phase || "?";
       const phaseHtml = phase !== "?" ?
         `<span class="proj-phase phase-${escapeHtml(phase)}">${escapeHtml(phase.toUpperCase())}</span>` : "";
+      const runDot = status.running ? `<span class="pi-running" title="running on port ${status.running.port}"></span>` : "";
       const item = el("div", "project-item" + (activeProject === p.slug ? " active" : ""));
       item.dataset.slug = p.slug;
       item.innerHTML = `
-        <div class="project-name">${escapeHtml(p.slug)}${phaseHtml}</div>
+        <button class="pi-delete" title="Delete project">✕</button>
+        <div class="project-name">${escapeHtml(p.slug)}${phaseHtml}${runDot}</div>
         <div class="project-meta">
           <span>📄 ${p.files.length} files</span>
           <span>${fmtAgo(p.modified)}</span>
         </div>
       `;
-      item.addEventListener("click", () => openProject(p));
+      item.addEventListener("click", (e) => {
+        if (e.target.classList.contains("pi-delete")) return; // handled below
+        openProject(p);
+      });
+      item.querySelector(".pi-delete").addEventListener("click", (e) => {
+        e.stopPropagation();
+        confirmDelete(p.slug);
+      });
       list.appendChild(item);
     }
     $("#project-count").textContent = d.projects.length;
@@ -131,6 +139,7 @@ async function openProject(p) {
     tabs.appendChild(tab);
   }
   if (sorted.length > 0) loadFile(p.slug, sorted[0].path);
+  paintProjectActions();
 }
 
 async function loadFile(slug, relPath) {
@@ -157,6 +166,182 @@ $("#pd-close").addEventListener("click", () => {
   $("#project-detail").classList.add("hidden");
   refreshProjects();
 });
+
+// ════════════════════════════════════════════════════════════════
+// PROJECT ACTIONS — RUN / STOP / OPEN / DELETE + run-log tail
+// ════════════════════════════════════════════════════════════════
+
+let runLogPollHandle = null;
+
+function paintProjectActions() {
+  if (!activeProject) return;
+  const status = lastRunStatus[activeProject] || {};
+  const running = status.running;            // null or {pid, port, url, ...}
+  const runnable = status.runnable !== false;
+  const runBtn = $("#pd-run");
+  const stopBtn = $("#pd-stop");
+  const openBtn = $("#pd-open");
+  const statusEl = $("#pd-status");
+
+  if (running) {
+    runBtn.hidden = true;
+    stopBtn.hidden = false;
+    openBtn.hidden = false;
+    openBtn.href = running.url;
+    const upS = Math.max(0, Math.floor(Date.now() / 1000 - running.started_at));
+    const upStr = upS < 60 ? `${upS}s` : `${Math.floor(upS / 60)}m${upS % 60}s`;
+    statusEl.className = "pd-status running";
+    statusEl.textContent = `● RUNNING · pid ${running.pid} · :${running.port} · up ${upStr}`;
+    if (!runLogPollHandle) {
+      runLogPollHandle = setInterval(refreshRunLog, 2000);
+      refreshRunLog();
+    }
+  } else {
+    runBtn.hidden = false;
+    stopBtn.hidden = true;
+    openBtn.hidden = true;
+    if (!runnable) {
+      runBtn.disabled = true;
+      statusEl.className = "pd-status";
+      statusEl.textContent = "no entry point found";
+    } else {
+      runBtn.disabled = false;
+      const entry = status.entry || "?";
+      const kind = status.entry_kind || "?";
+      statusEl.className = "pd-status";
+      statusEl.textContent = `entry: ${entry} (${kind})`;
+    }
+    if (runLogPollHandle) { clearInterval(runLogPollHandle); runLogPollHandle = null; }
+  }
+}
+
+$("#pd-run").addEventListener("click", async () => {
+  if (!activeProject) return;
+  const btn = $("#pd-run");
+  const statusEl = $("#pd-status");
+  btn.classList.add("starting");
+  btn.disabled = true;
+  statusEl.className = "pd-status starting";
+  statusEl.textContent = "BOOTING...";
+  $("#pd-runlog").classList.remove("hidden");
+  $("#pd-runlog").textContent = "starting...";
+
+  try {
+    const r = await fetch(`/api/projects/${encodeURIComponent(activeProject)}/run`, { method: "POST" });
+    const d = await r.json();
+    if (!d.ok) {
+      statusEl.className = "pd-status error";
+      statusEl.textContent = `✗ ${d.error || "boot failed"}`;
+      $("#pd-runlog").textContent = (d.detail || "") + "\n\n" + (d.log_tail || "(no log)");
+    } else if (d.already_running) {
+      statusEl.textContent = `(already running on :${d.port})`;
+    }
+    // refresh status which re-paints buttons
+    await refreshRunStatus();
+    paintProjectActions();
+  } catch (e) {
+    statusEl.className = "pd-status error";
+    statusEl.textContent = "✗ " + e.message;
+  } finally {
+    btn.classList.remove("starting");
+    btn.disabled = false;
+  }
+});
+
+$("#pd-stop").addEventListener("click", async () => {
+  if (!activeProject) return;
+  const btn = $("#pd-stop");
+  btn.disabled = true;
+  try {
+    await fetch(`/api/projects/${encodeURIComponent(activeProject)}/stop`, { method: "POST" });
+    await refreshRunStatus();
+    paintProjectActions();
+    $("#pd-runlog").classList.add("hidden");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("#pd-delete").addEventListener("click", () => {
+  if (!activeProject) return;
+  confirmDelete(activeProject);
+});
+
+async function refreshRunLog() {
+  if (!activeProject) return;
+  try {
+    const r = await fetch(`/api/projects/${encodeURIComponent(activeProject)}/run-tail`);
+    const d = await r.json();
+    const log = $("#pd-runlog");
+    log.classList.toggle("hidden", !d.log);
+    if (d.log) {
+      const wasAtBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 30;
+      log.textContent = d.log;
+      if (wasAtBottom) log.scrollTop = log.scrollHeight;
+    }
+    if (!d.alive && runLogPollHandle) {
+      // Process died — refresh status to update buttons + stop polling
+      clearInterval(runLogPollHandle); runLogPollHandle = null;
+      refreshRunStatus().then(paintProjectActions);
+    }
+  } catch (e) {}
+}
+
+// ──────── confirm modal ────────
+let pendingConfirm = null;
+function showConfirm({ title, body, onYes }) {
+  pendingConfirm = onYes;
+  $("#confirm-title").textContent = title;
+  $("#confirm-body").innerHTML = body;
+  $("#confirm-modal").classList.remove("hidden");
+}
+function hideConfirm() {
+  pendingConfirm = null;
+  $("#confirm-modal").classList.add("hidden");
+}
+$("#confirm-no").addEventListener("click", hideConfirm);
+$("#confirm-yes").addEventListener("click", async () => {
+  const fn = pendingConfirm;
+  hideConfirm();
+  if (fn) try { await fn(); } catch (e) { console.warn(e); }
+});
+$("#confirm-modal").addEventListener("click", (e) => {
+  if (e.target.id === "confirm-modal") hideConfirm();
+});
+
+function confirmDelete(slug) {
+  showConfirm({
+    title: "DELETE PROJECT",
+    body: `Permanently delete <span class="target">${escapeHtml(slug)}</span>?<br/><br/>` +
+          `This removes <code>~/.openclaw/company/projects/${escapeHtml(slug)}/</code>` +
+          ` including all files, the venv, and the run log.<br/>` +
+          `If it's running, it will be stopped first.<br/><br/>` +
+          `<b>This cannot be undone.</b>`,
+    onYes: async () => {
+      try {
+        const r = await fetch(`/api/projects/${encodeURIComponent(slug)}`, { method: "DELETE" });
+        const d = await r.json();
+        if (!d.ok) {
+          alert("Delete failed: " + (d.error || "unknown") + "\n" + (d.detail || ""));
+          return;
+        }
+        if (activeProject === slug) {
+          activeProject = null;
+          activeFile = null;
+          $("#project-detail").classList.add("hidden");
+        }
+        // forget cached state for this slug
+        delete lastRunStatus[slug];
+        firedCompletions.delete(`complete:${slug}`);
+        firedCompletions.delete(`failed:${slug}`);
+        await refreshRunStatus();
+        await refreshProjects();
+      } catch (e) {
+        alert("Delete failed: " + e.message);
+      }
+    },
+  });
+}
 
 // ──────── activity stream ────────
 // Track scroll state: are we pinned to the bottom (terminal-style auto-follow)
@@ -565,6 +750,8 @@ async function refreshRunStatus() {
       }
     }
     firstStatusRender = false;
+    // Repaint action bar so RUN/STOP/OPEN reflect current process state
+    paintProjectActions();
   } catch (e) {
     console.warn("run-status refresh failed:", e);
   }

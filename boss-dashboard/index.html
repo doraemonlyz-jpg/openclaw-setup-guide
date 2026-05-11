@@ -79,8 +79,32 @@
           <h3 id="pd-title">—</h3>
           <button id="pd-close" class="btn-icon" title="close">✕</button>
         </div>
+
+        <!-- Action bar: RUN / STOP / OPEN / DELETE -->
+        <div class="pd-actions" id="pd-actions">
+          <button id="pd-run"    class="pd-btn pd-run"    title="Start the project locally">▶ RUN</button>
+          <button id="pd-stop"   class="pd-btn pd-stop"   title="Stop running process" hidden>⏹ STOP</button>
+          <a      id="pd-open"   class="pd-btn pd-open"   title="Open in new tab" target="_blank" hidden>🔗 OPEN</a>
+          <span   id="pd-status" class="pd-status">—</span>
+          <button id="pd-delete" class="pd-btn pd-delete" title="Delete this project (cannot undo)">🗑 DELETE</button>
+        </div>
+
+        <pre class="run-log hidden" id="pd-runlog"></pre>
+
         <div class="file-tabs" id="pd-tabs"></div>
         <pre class="file-content" id="pd-content">// select a file →</pre>
+      </div>
+
+      <!-- Generic confirm modal -->
+      <div id="confirm-modal" class="confirm-modal hidden" role="dialog">
+        <div class="confirm-card">
+          <div class="confirm-title" id="confirm-title">CONFIRM</div>
+          <div class="confirm-body" id="confirm-body">Are you sure?</div>
+          <div class="confirm-actions">
+            <button id="confirm-no"  class="cb-btn cb-btn-ghost">CANCEL</button>
+            <button id="confirm-yes" class="cb-btn confirm-yes">CONFIRM</button>
+          </div>
+        </div>
       </div>
     </section>
 

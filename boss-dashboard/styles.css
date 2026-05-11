@@ -1343,6 +1343,236 @@ a { color: var(--neon-cyan); text-decoration: none; }
       inset 0 0 36px rgba(255, 51, 102, 0.30);
   }
 }
+
+/* ════════════════════════════════════════════════════════════════
+   PROJECT ACTION BAR — RUN / STOP / OPEN / DELETE
+   ════════════════════════════════════════════════════════════════ */
+
+.pd-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-dim);
+  border-bottom: 1px solid var(--border-dim);
+  background: rgba(8, 16, 30, 0.5);
+  flex-wrap: wrap;
+}
+
+.pd-btn {
+  background: transparent;
+  border: 1px solid currentColor;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1.3px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 150ms ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
+}
+.pd-btn:disabled, .pd-btn[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.pd-btn[hidden] { display: none !important; }
+
+.pd-run {
+  color: var(--neon-green);
+  text-shadow: var(--glow-green-sm);
+}
+.pd-run:hover {
+  background: rgba(57, 255, 20, 0.12);
+  box-shadow: 0 0 14px rgba(57, 255, 20, 0.45);
+}
+.pd-run.starting {
+  color: var(--neon-yellow);
+  animation: cb-blink 0.8s infinite;
+}
+
+.pd-stop {
+  color: var(--neon-orange);
+  text-shadow: 0 0 4px rgba(255, 136, 0, 0.5);
+}
+.pd-stop:hover {
+  background: rgba(255, 136, 0, 0.12);
+  box-shadow: 0 0 14px rgba(255, 136, 0, 0.45);
+}
+
+.pd-open {
+  color: var(--neon-cyan);
+  text-shadow: var(--glow-cyan-sm);
+  animation: cb-glint 2.4s linear infinite;
+}
+.pd-open:hover {
+  background: rgba(0, 240, 255, 0.12);
+  box-shadow: var(--glow-cyan-md);
+}
+
+.pd-delete {
+  color: var(--text-muted);
+  border-color: var(--text-muted);
+  margin-left: auto;
+}
+.pd-delete:hover {
+  color: var(--neon-red);
+  border-color: var(--neon-red);
+  background: rgba(255, 51, 102, 0.12);
+  box-shadow: 0 0 14px rgba(255, 51, 102, 0.45);
+}
+
+.pd-status {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  padding: 0 6px;
+}
+.pd-status.running {
+  color: var(--neon-green);
+  text-shadow: var(--glow-green-sm);
+}
+.pd-status.starting {
+  color: var(--neon-yellow);
+  animation: cb-blink 0.8s infinite;
+}
+.pd-status.error {
+  color: var(--neon-red);
+}
+
+.run-log {
+  background: var(--code-bg);
+  color: var(--neon-green);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 10px 12px;
+  margin: 0;
+  max-height: 180px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-dim);
+  border-bottom: 1px solid var(--border-dim);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.run-log.hidden { display: none; }
+
+/* Project list — delete icon visible on hover */
+.project-item {
+  position: relative;
+}
+.project-item .pi-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: transparent;
+  border: 1px solid var(--text-muted);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 1px 5px;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 150ms ease;
+  font-family: var(--mono);
+  border-radius: 1px;
+}
+.project-item:hover .pi-delete {
+  opacity: 1;
+}
+.project-item .pi-delete:hover {
+  color: var(--neon-red);
+  border-color: var(--neon-red);
+  box-shadow: 0 0 8px rgba(255, 51, 102, 0.4);
+}
+
+/* Project running indicator on list row */
+.project-item .pi-running {
+  display: inline-block;
+  margin-left: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--neon-green);
+  box-shadow: 0 0 6px var(--neon-green);
+  animation: pi-pulse 1.6s ease-in-out infinite;
+  vertical-align: middle;
+}
+@keyframes pi-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   CONFIRM MODAL (used for DELETE confirmation)
+   ════════════════════════════════════════════════════════════════ */
+
+.confirm-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(5, 8, 16, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fade-in 200ms ease;
+}
+.confirm-modal.hidden { display: none; }
+
+.confirm-card {
+  width: min(420px, 92vw);
+  background: var(--bg-card);
+  border: 1px solid var(--neon-red);
+  box-shadow:
+    0 0 30px rgba(255, 51, 102, 0.4),
+    inset 0 0 16px rgba(255, 51, 102, 0.1);
+  clip-path: polygon(
+    14px 0, calc(100% - 14px) 0, 100% 14px,
+    100% calc(100% - 14px), calc(100% - 14px) 100%,
+    14px 100%, 0 calc(100% - 14px), 0 14px);
+  padding: 22px 26px;
+  font-family: var(--mono);
+}
+.confirm-title {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 3px;
+  color: var(--neon-red);
+  text-shadow: 0 0 6px rgba(255, 51, 102, 0.6);
+  margin-bottom: 12px;
+}
+.confirm-body {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 18px;
+  word-break: break-word;
+}
+.confirm-body .target {
+  color: var(--neon-yellow);
+  font-weight: bold;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.confirm-yes {
+  border-color: var(--neon-red);
+  color: var(--neon-red);
+  text-shadow: 0 0 4px rgba(255, 51, 102, 0.5);
+}
+.confirm-yes:hover {
+  background: rgba(255, 51, 102, 0.18);
+  box-shadow: 0 0 14px rgba(255, 51, 102, 0.6);
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes cb-blink {
   0%, 100% { opacity: 1; }
   50%      { opacity: .3; }
