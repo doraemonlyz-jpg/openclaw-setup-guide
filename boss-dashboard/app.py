@@ -139,6 +139,11 @@ def parse_session(path: Path, limit: int = 200) -> list[dict[str, Any]]:
     return out[-limit:]
 
 
+_IGNORE_DIRS = {"__pycache__", ".venv", "venv", "node_modules", ".git",
+                "dist", "build", ".pytest_cache", ".mypy_cache", ".idea",
+                ".vscode", ".tox", ".cache"}
+
+
 def list_projects() -> list[dict[str, Any]]:
     out = []
     if not PROJECTS.exists():
@@ -148,13 +153,19 @@ def list_projects() -> list[dict[str, Any]]:
             continue
         files = []
         for f in sorted(p.rglob("*")):
-            if f.is_file() and not f.name.startswith("."):
-                rel = str(f.relative_to(p))
-                files.append({
-                    "path": rel,
-                    "size": f.stat().st_size,
-                    "modified": int(f.stat().st_mtime),
-                })
+            if not f.is_file():
+                continue
+            if f.name.startswith("."):
+                continue
+            # Skip noise dirs anywhere in the path (venv, cache, deps, ...)
+            if set(f.relative_to(p).parts) & _IGNORE_DIRS:
+                continue
+            rel = str(f.relative_to(p))
+            files.append({
+                "path": rel,
+                "size": f.stat().st_size,
+                "modified": int(f.stat().st_mtime),
+            })
         out.append({
             "slug": p.name,
             "path": str(p),
@@ -266,13 +277,11 @@ def api_run_status():
                 continue
 
             # Skip noise dirs (cache, venv, deps) — they confuse "recently modified"
-            ignore_parts = {"__pycache__", ".venv", "venv", "node_modules",
-                            ".git", "dist", "build", ".pytest_cache", ".mypy_cache"}
             files = [
                 f for f in p.rglob("*")
                 if f.is_file()
                 and not f.name.startswith(".")
-                and not (set(f.relative_to(p).parts) & ignore_parts)
+                and not (set(f.relative_to(p).parts) & _IGNORE_DIRS)
             ]
             file_count = len(files)
             mtimes = [f.stat().st_mtime for f in files] or [p.stat().st_mtime]
