@@ -137,6 +137,37 @@ After every worker reply, PM is required to verify the claimed file exists with 
 
 ---
 
+## Lane discipline — agents stay in their job description
+
+Each persona has an explicit `🚧 Stay in your lane` block that lists ALLOWED `write` paths and FORBIDDEN ones. The contract is:
+
+| Agent | ALLOWED writes | NEVER writes |
+|---|---|---|
+| `pm` | `SPEC.md`, `STATUS.json`, optional `PROGRESS.md` | any code file, all other `.md` |
+| `techlead` | `TASKS.md`, `ARCHITECTURE.md` | any code, other agents' docs |
+| `eng-be` | `*.py`, `requirements.txt`, `Dockerfile`, sub-modules under project root | `templates/`, `static/`, `*.html`, `*.css`, `*.js`, all docs |
+| `eng-fe` | `templates/*.html`, `static/{css,js,img}` | any `.py`, `requirements.txt`, all docs |
+| `qa` | `TEST_PLAN.md`, `TEST_REPORT.md` | any code, other agents' docs |
+| `devops` | (almost always nothing — output is the EVIDENCE block); optional `DEPLOY.md` | any code, all other docs |
+| `designer` | `DESIGN.md` | any code, other agents' docs |
+| `writer` | `README.md`, optional `CHANGELOG.md` | any code, other agents' docs |
+
+When PM hands an agent something outside its lane, that agent replies with a literal three-line **`OUT OF LANE`** signal:
+
+```
+OUT OF LANE: <one-line description of what was asked>
+ROUTE TO: <correct agent id>
+REASON: <one line>
+```
+
+PM's persona has a matching rule: when it sees `OUT OF LANE: …`, it **re-dispatches** the same task to the named agent — never patches the file itself, never argues with the worker.
+
+This solves three real failure modes from the previous build:
+
+1. **PM patching code mid-FIX.** During a self-heal run, PM was directly writing `templates/index.html` instead of dispatching `eng-fe`. The boss saw the project work, but the team's autonomy was a fiction. With lane locks, PM physically can't justify writing `.html` — it dispatches every time.
+2. **eng-be inventing a stub HTML.** When asked to "make sure the page works", the backend engineer was inlining a placeholder template "for now". Now it bounces with `ROUTE TO: eng-fe` and the right person gets the work.
+3. **QA / DevOps absorbing fixes.** Both used to occasionally edit a missing import while smoke-testing. Now they REPORT the bug in their evidence and PM routes the fix.
+
 ## Caveats
 
 These aren't optional reading. **Local 8B-14B models cannot match Claude or GPT-5 at multi-step orchestration**, and you will hit each of these:
