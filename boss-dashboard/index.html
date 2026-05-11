@@ -3,21 +3,24 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>🦞 Boss Dashboard — AI Studio Console</title>
+  <title>// BOSS_CONSOLE :: AI_STUDIO //</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <!-- CRT scanlines overlay -->
+  <div class="scanlines" aria-hidden="true"></div>
+
   <header class="topbar">
     <div class="brand">
-      <span class="brand-mark">🦞</span>
+      <span class="brand-mark">⌬</span>
       <div>
-        <h1>老板的仪表盘<span class="sub">Boss Console</span></h1>
-        <p class="tagline">8-agent AI software studio · running on your hardware</p>
+        <h1>BOSS CONSOLE<span class="sub">// SECTOR_8 · LIVE</span></h1>
+        <p class="tagline">8-AGENT NEURAL STUDIO · SELF-HOSTED · NO TELEMETRY</p>
       </div>
     </div>
     <div class="status">
       <span class="dot dot-on"></span>
-      <span id="status-text">connected</span>
+      <span id="status-text">UPLINK_ACTIVE</span>
       <span class="meta" id="updated-at">—</span>
     </div>
   </header>
@@ -26,7 +29,7 @@
     <!-- ───── Column 1 — Agents ───── -->
     <section class="col col-agents">
       <div class="col-head">
-        <h2>Agents</h2>
+        <h2>// Agents</h2>
         <span class="counter" id="agent-count">0</span>
       </div>
       <div id="agents-list" class="agents-list"></div>
@@ -35,7 +38,7 @@
     <!-- ───── Column 2 — Projects ───── -->
     <section class="col col-projects">
       <div class="col-head">
-        <h2>Projects</h2>
+        <h2>// Projects</h2>
         <span class="counter" id="project-count">0</span>
       </div>
       <div id="projects-list" class="projects-list"></div>
@@ -46,29 +49,30 @@
           <button id="pd-close" class="btn-icon" title="close">✕</button>
         </div>
         <div class="file-tabs" id="pd-tabs"></div>
-        <pre class="file-content" id="pd-content">click a file →</pre>
+        <pre class="file-content" id="pd-content">// select a file →</pre>
       </div>
     </section>
 
     <!-- ───── Column 3 — Activity ───── -->
-    <section class="col col-activity">
+    <section class="col col-activity" style="position: relative;">
       <div class="col-head">
-        <h2>Live Activity</h2>
+        <h2>// Live Activity</h2>
         <span class="counter" id="activity-count">0</span>
       </div>
       <div id="activity-stream" class="activity-stream"></div>
+      <button id="scroll-pin" class="scroll-pin" title="Jump to latest">▼ LIVE</button>
     </section>
   </main>
 
   <!-- ───── Boss input footer ───── -->
   <footer class="boss-bar">
     <div class="boss-bar-inner">
-      <label class="boss-label">老板下指令 / Boss says:</label>
+      <label class="boss-label">BOSS_CMD</label>
       <textarea
         id="boss-input"
         rows="2"
         placeholder="e.g. Build me a tiny pomodoro CLI in Python. Path: ~/.openclaw/company/projects/pomodoro/"></textarea>
-      <button id="boss-send" class="btn-primary">Send to PM →</button>
+      <button id="boss-send" class="btn-primary">EXECUTE</button>
     </div>
     <div id="boss-log" class="boss-log hidden"></div>
   </footer>

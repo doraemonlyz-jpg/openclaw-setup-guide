@@ -153,50 +153,87 @@ $("#pd-close").addEventListener("click", () => {
 });
 
 // ──────── activity stream ────────
+// Track scroll state: are we pinned to the bottom (terminal-style auto-follow)
+// or did the user scroll up to read history (don't yank them around)?
+let stickToBottom = true;
+let lastRenderedKey = "";
+
+const stream = $("#activity-stream");
+stream.addEventListener("scroll", () => {
+  const slack = 40; // px tolerance
+  const atBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < slack;
+  stickToBottom = atBottom;
+  $("#scroll-pin").classList.toggle("visible", !atBottom);
+});
+
+$("#scroll-pin").addEventListener("click", () => {
+  stickToBottom = true;
+  scrollActivityToBottom();
+});
+
+function scrollActivityToBottom() {
+  stream.scrollTop = stream.scrollHeight;
+  $("#scroll-pin").classList.remove("visible");
+}
+
+function renderActivityCard(m) {
+  const cls = ["act-msg", `role-${m.role}`, `kind-${m.kind}`];
+  if (m.tool_calls.length || m.tool_results.length) cls.push("has-tool");
+  const card = el("div", cls.join(" "));
+  const peerStr = m.peer ? `← ${escapeHtml(m.peer)}` : "";
+  let body = "";
+  if (m.text) {
+    // Strip the inter-session boilerplate prefix
+    const cleaned = m.text.replace(
+      /^\[Inter-session message\][^\n]*\nThis content was routed[^\n]*\n[^\n]*\n?/, ""
+    );
+    body = `<div class="act-body">${escapeHtml(cleaned).slice(0, 1200)}</div>`;
+  }
+  let toolHtml = "";
+  for (const tc of m.tool_calls) {
+    const argsStr = JSON.stringify(tc.args || {}).slice(0, 200);
+    toolHtml += `<div class="tool-call">→ <span class="name">${escapeHtml(tc.name)}</span>(${escapeHtml(argsStr)})</div>`;
+  }
+  for (const tr of m.tool_results.slice(0, 1)) {
+    toolHtml += `<div class="tool-result">${escapeHtml(tr.slice(0, 300))}</div>`;
+  }
+  card.innerHTML = `
+    <div class="act-head">
+      <span class="agent-tag">${escapeHtml(m.agent)}</span>
+      <span class="role-tag">${escapeHtml(m.role)}</span>
+      <span>${escapeHtml(peerStr)}</span>
+      <span class="ts">${fmtTime(m.ts)}</span>
+    </div>
+    ${body}
+    ${toolHtml}
+  `;
+  return card;
+}
+
 async function refreshActivity() {
   try {
-    const r = await fetch("/api/activity?limit=20");
+    const r = await fetch("/api/activity?limit=30");
     const d = await r.json();
-    const stream = $("#activity-stream");
-    stream.innerHTML = "";
-    const inner = el("div", "activity-stream-inner");
-    // Show newest at the top of inner; flex column-reverse on outer flips it visually
-    const items = [...d.items].reverse();
-    for (const m of items) {
-      const cls = ["act-msg", `role-${m.role}`, `kind-${m.kind}`];
-      if (m.tool_calls.length || m.tool_results.length) cls.push("has-tool");
-      const card = el("div", cls.join(" "));
-      const peerStr = m.peer ? `← ${escapeHtml(m.peer)}` : "";
-      let body = "";
-      if (m.text) {
-        // Strip the inter-session boilerplate prefix
-        const cleaned = m.text.replace(
-          /^\[Inter-session message\][^\n]*\nThis content was routed[^\n]*\n[^\n]*\n?/, ""
-        );
-        body = `<div class="act-body">${escapeHtml(cleaned).slice(0, 1200)}</div>`;
-      }
-      let toolHtml = "";
-      for (const tc of m.tool_calls) {
-        const argsStr = JSON.stringify(tc.args || {}).slice(0, 200);
-        toolHtml += `<div class="tool-call">→ <span class="name">${escapeHtml(tc.name)}</span>(${escapeHtml(argsStr)})</div>`;
-      }
-      for (const tr of m.tool_results.slice(0, 1)) {
-        toolHtml += `<div class="tool-result">${escapeHtml(tr.slice(0, 300))}</div>`;
-      }
-      card.innerHTML = `
-        <div class="act-head">
-          <span class="agent-tag">${escapeHtml(m.agent)}</span>
-          <span class="role-tag">${escapeHtml(m.role)}</span>
-          <span>${escapeHtml(peerStr)}</span>
-          <span class="ts">${fmtTime(m.ts)}</span>
-        </div>
-        ${body}
-        ${toolHtml}
-      `;
-      inner.appendChild(card);
+    // Stable key for change detection — avoid re-rendering when nothing's new
+    const key = d.items.map((m) => `${m.agent}:${m.id || m.ts}`).join("|");
+    if (key === lastRenderedKey) {
+      $("#activity-count").textContent = d.items.length;
+      return;
     }
-    stream.appendChild(inner);
+    lastRenderedKey = key;
+
+    // Items come oldest → newest. Render in order, newest at the bottom (terminal style).
+    stream.innerHTML = "";
+    for (const m of d.items) {
+      stream.appendChild(renderActivityCard(m));
+    }
     $("#activity-count").textContent = d.items.length;
+
+    // Auto-scroll to bottom only if user was already there
+    if (stickToBottom) {
+      // double rAF to ensure layout has settled before scrolling
+      requestAnimationFrame(() => requestAnimationFrame(scrollActivityToBottom));
+    }
   } catch (e) {
     console.warn("activity refresh failed:", e);
   }

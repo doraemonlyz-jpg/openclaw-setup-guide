@@ -1,6 +1,6 @@
 # Boss Dashboard
 
-A tiny single-file Flask app that visualises your AI software studio. Three columns, one boss-input footer, no build step.
+A tiny single-file Flask app that visualises your AI software studio. Three columns, one boss-input footer, no build step. **Cyberpunk** theme: neon cyan + magenta + matrix green over a dark grid background, CRT scanlines overlay, clip-path corners, glow on every accent.
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -24,7 +24,7 @@ A tiny single-file Flask app that visualises your AI software studio. Three colu
 
 - **Left** — 8 agents with their model, message count, last-active timestamp. Cards glow with the lobster accent when the agent's session was modified in the last 60 s.
 - **Middle** — every project under `~/.openclaw/company/projects/`. Click one to inspect SPEC.md / TASKS.md / DESIGN.md / source files / TEST_REPORT.md / README.md in tabs.
-- **Right** — combined timeline of every message in every agent's session, oldest at the bottom. Inter-session messages (agent→agent) are highlighted in lobster orange; tool calls in yellow. Polls every 3 seconds.
+- **Right** — combined timeline of every message in every agent's session, **oldest at top, newest at bottom (terminal-style)**. The view auto-scrolls to follow new messages when you're at the bottom; if you scroll up to read history, scrolling stops to not yank you around. A floating `▼ LIVE` button appears top-right when there's catch-up to do — click it to jump back to the latest. Inter-session (agent→agent) messages glow magenta; tool calls glow yellow; assistant replies glow green. Polls every 3 seconds.
 - **Bottom** — type a request and hit `Send` (or `Cmd/Ctrl+Enter`). It spawns `openclaw agent --agent pm --message "..."` in the background and tails the log inline.
 
 ## Run it
