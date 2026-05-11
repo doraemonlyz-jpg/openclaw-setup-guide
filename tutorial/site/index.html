@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Agent Engineering · 面试向教程</title>
+  <meta name="description" content="从 LLM 到生产级多 Agent 系统的完整教程。13 个模块 + 50 道面试题 + 4 道系统设计真题，全部用一个真实的 OpenClaw 公司案例串起来。">
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='80' font-size='80'%3E◤%3C/text%3E%3C/svg%3E">
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ─────── Top Bar ─────── -->
+  <header class="topbar">
+    <button class="menu-toggle" id="menu-toggle" aria-label="Open menu">≡</button>
+    <a class="brand" href="#/">
+      <span class="brand-mark">◤◢</span>
+      <span class="brand-text">
+        <span class="brand-title">LLM Agent Engineering</span>
+        <span class="brand-sub">面试向教程 · 真代码 · 入门到精通</span>
+      </span>
+    </a>
+    <div class="topbar-tools">
+      <input type="search" id="search" class="search" placeholder="搜索..." autocomplete="off">
+      <a class="github-link" id="github-link" target="_blank" rel="noopener" title="GitHub repo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.4.5 0 5.9 0 12.6c0 5.3 3.4 9.8 8.2 11.4.6.1.8-.3.8-.6v-2.2C5.7 21.9 5 20 5 20c-.5-1.4-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2 1-.3 2-.4 3-.4s2 .1 3 .4c2.3-1.5 3.3-1.2 3.3-1.2.7 1.7.3 2.9.2 3.2.8.8 1.2 1.9 1.2 3.2 0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6C20.6 22.4 24 17.9 24 12.6 24 5.9 18.6.5 12 .5z"/></svg>
+      </a>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- ─────── Sidebar ─────── -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-inner">
+        <div class="sidebar-section">
+          <div class="sidebar-label">Modules</div>
+          <nav id="toc-nav" class="toc-nav"></nav>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="sidebar-label">Page outline</div>
+          <nav id="page-outline" class="page-outline">
+            <p class="muted">Headings appear here once a module loads.</p>
+          </nav>
+        </div>
+
+        <div class="sidebar-footer">
+          <div class="muted small">Built with vanilla HTML+JS</div>
+          <div class="muted small">No tracking, no cookies</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ─────── Main ─────── -->
+    <main class="main" id="main">
+
+      <!-- Landing (shown when no module selected) -->
+      <section class="hero" id="hero">
+        <div class="hero-inner">
+          <div class="hero-eyebrow">// LLM Agent Engineering · 2026</div>
+          <h1 class="hero-title">
+            从 <span class="accent">LLM 基础</span> 到
+            <span class="accent2">生产级多 Agent 系统</span>
+          </h1>
+          <p class="hero-lead">
+            一份不绕弯子的面试向教程。13 个模块、50 道高频题、4 道系统设计真题——全部用一个真跑通的 8-Agent AI 软件公司作为案例串起来。读完你能在白板上画清楚每一层、能现场拿出 GitHub 仓库讲细节。
+          </p>
+
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#/00-overview">▶ 开始 Module 00</a>
+            <a class="btn btn-ghost" href="#/11-interview-qa">直接看 50 道面试题</a>
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <div class="stat-num" id="stat-modules">13</div>
+              <div class="stat-label">个模块</div>
+            </div>
+            <div class="stat">
+              <div class="stat-num" id="stat-mins">—</div>
+              <div class="stat-label">分钟读完</div>
+            </div>
+            <div class="stat">
+              <div class="stat-num">50</div>
+              <div class="stat-label">道面试题</div>
+            </div>
+            <div class="stat">
+              <div class="stat-num">4</div>
+              <div class="stat-label">道系统设计</div>
+            </div>
+          </div>
+
+          <div class="paths">
+            <div class="path-card">
+              <div class="path-tag">3 天突击</div>
+              <div class="path-desc">读 01 → 02 → 03 → 05 → 06 → 11，其余按需查</div>
+              <a class="path-link" href="#/01-why-agents">从这开始 →</a>
+            </div>
+            <div class="path-card highlight">
+              <div class="path-tag">系统学习（推荐）</div>
+              <div class="path-desc">按 00 → 12 顺序读，每天 1.5h，2 周走完</div>
+              <a class="path-link" href="#/00-overview">从这开始 →</a>
+            </div>
+            <div class="path-card">
+              <div class="path-tag">作为参考</div>
+              <div class="path-desc">配合 GitHub 仓库一边读一边在本机跑 OpenClaw 公司</div>
+              <a class="path-link" id="path-github" target="_blank" rel="noopener">仓库 →</a>
+            </div>
+          </div>
+
+          <div class="topics">
+            <div class="topics-label">本教程会让你能讲清楚</div>
+            <div class="topic-pills">
+              <span class="pill">Token / Context / KV cache</span>
+              <span class="pill">ReAct / Function Calling / MCP</span>
+              <span class="pill">Hallucinated tool call 的 5 层防御</span>
+              <span class="pill">Hub-and-Spoke vs Pipeline vs Swarm</span>
+              <span class="pill">Lane Discipline + OUT OF LANE 协议</span>
+              <span class="pill">Sandbox bypass 的合理设计</span>
+              <span class="pill">Self-healing FIX MODE 工作流</span>
+              <span class="pill">Watchdog / Structural Gate</span>
+              <span class="pill">Trace / Metrics / Notifications</span>
+              <span class="pill">100 Agent 的 scale 路径</span>
+            </div>
+          </div>
+
+          <div class="module-grid" id="module-grid"></div>
+
+        </div>
+      </section>
+
+      <!-- Module content (shown when route matches) -->
+      <article class="module hidden" id="module">
+        <div class="module-meta">
+          <a class="module-back" href="#/">← 返回首页</a>
+          <span class="module-num" id="module-num"></span>
+          <span class="module-mins" id="module-mins"></span>
+        </div>
+        <div class="module-content markdown-body" id="module-content">
+          <div class="loading">Loading…</div>
+        </div>
+        <nav class="module-nav" id="module-nav">
+          <a class="nav-prev" id="nav-prev"></a>
+          <a class="nav-next" id="nav-next"></a>
+        </nav>
+      </article>
+
+      <footer class="footer">
+        <div class="footer-inner">
+          <div>© 2026 · A vanilla HTML+JS site</div>
+          <div>
+            <a id="footer-github" target="_blank" rel="noopener">GitHub</a>
+            ·
+            <a href="#/">首页</a>
+          </div>
+        </div>
+      </footer>
+
+    </main>
+
+  </div>
+
+  <!-- Search overlay -->
+  <div class="search-overlay hidden" id="search-overlay">
+    <div class="search-results" id="search-results"></div>
+  </div>
+
+  <!-- libs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>

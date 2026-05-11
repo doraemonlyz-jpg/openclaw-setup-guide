@@ -1,0 +1,99 @@
+{
+  "title": "LLM Agent Engineering",
+  "subtitle": "从单 Agent 到生产级多 Agent 系统",
+  "tagline": "面试向 · 真代码 · 从入门到精通",
+  "github": "https://github.com/doraemonlyz-jpg/openclaw-setup-guide",
+  "modules": [
+    {
+      "id": "00-overview",
+      "num": "00",
+      "title": "总览 & 学习路径",
+      "summary": "心智地图 + 关键词查询表",
+      "minutes": 8
+    },
+    {
+      "id": "01-why-agents",
+      "num": "01",
+      "title": "为什么 2026 年大家都在做 Agent",
+      "summary": "行业背景、岗位画像、面试关注点",
+      "minutes": 12
+    },
+    {
+      "id": "02-llm-fundamentals",
+      "num": "02",
+      "title": "LLM 基础",
+      "summary": "Token / Context / Sampling / 量化 / 推理引擎",
+      "minutes": 25
+    },
+    {
+      "id": "03-tool-use",
+      "num": "03",
+      "title": "Tool Use & Function Calling",
+      "summary": "ReAct 循环 / Schema 设计 / 防幻觉",
+      "minutes": 22
+    },
+    {
+      "id": "04-single-agent",
+      "num": "04",
+      "title": "单 Agent 系统设计",
+      "summary": "Persona / Workflow / State / Eval",
+      "minutes": 20
+    },
+    {
+      "id": "05-multi-agent",
+      "num": "05",
+      "title": "多 Agent 编排模式",
+      "summary": "Hub-and-Spoke / Pipeline / Swarm / Marketplace",
+      "minutes": 25
+    },
+    {
+      "id": "06-trust-verify",
+      "num": "06",
+      "title": "Trust & Verify",
+      "summary": "5 层防御让 Agent 不撒谎",
+      "minutes": 22
+    },
+    {
+      "id": "07-lane-discipline",
+      "num": "07",
+      "title": "Lane Discipline",
+      "summary": "角色边界 + OUT OF LANE 协议",
+      "minutes": 15
+    },
+    {
+      "id": "08-sandboxing",
+      "num": "08",
+      "title": "Sandboxing",
+      "summary": "Allowlist / Container / VM / Bypass 设计",
+      "minutes": 18
+    },
+    {
+      "id": "09-self-healing",
+      "num": "09",
+      "title": "Self-Healing (FIX MODE)",
+      "summary": "诊断 → 派单 → 验证 → 重试",
+      "minutes": 22
+    },
+    {
+      "id": "10-observability",
+      "num": "10",
+      "title": "Observability",
+      "summary": "STATUS.json / Trace / Notification 三件套",
+      "minutes": 18
+    },
+    {
+      "id": "11-interview-qa",
+      "num": "11",
+      "title": "50 道高频面试题",
+      "summary": "答案 + 关键词 + 追问对策（面试前一晚刷它）",
+      "minutes": 60
+    },
+    {
+      "id": "12-system-design",
+      "num": "12",
+      "title": "系统设计 4 题",
+      "summary": "Code Review / Customer Support / IDE / Trading",
+      "minutes": 45
+    }
+  ]
+}
