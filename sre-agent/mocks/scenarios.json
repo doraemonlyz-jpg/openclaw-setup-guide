@@ -1,0 +1,219 @@
+{
+  "scenarios": [
+    {
+      "id": "redis-pool-exhaustion",
+      "label": "Redis pool exhaustion after deploy",
+      "alert": {
+        "service": "checkout-api",
+        "severity": "SEV-2",
+        "description": "checkout-api 5xx error rate > 5% for 3 minutes",
+        "tags": ["env:prod", "team:payments"]
+      },
+      "logs": {
+        "hits": 1247,
+        "first_at": "2026-05-11T03:42:17Z",
+        "peak_at": "2026-05-11T03:48:00Z",
+        "top_messages": [
+          {
+            "count": 983,
+            "message": "ConnectionPoolTimeout: timed out waiting for a connection (pool size: 10, in use: 10)"
+          },
+          {
+            "count": 201,
+            "message": "redis.exceptions.ConnectionError: Error connecting to redis-prod-2.cache.svc on port 6379"
+          },
+          {
+            "count": 63,
+            "message": "RetryError: cannot execute redis.get after 3 attempts"
+          }
+        ],
+        "samples": [
+          {"log_id": "AwAAAYj-checkout-1", "timestamp": "2026-05-11T03:48:23Z", "message": "ConnectionPoolTimeout: timed out waiting for a connection (pool size: 10, in use: 10)"},
+          {"log_id": "AwAAAYj-checkout-2", "timestamp": "2026-05-11T03:48:31Z", "message": "redis.exceptions.ConnectionError: Error connecting to redis-prod-2.cache.svc on port 6379"},
+          {"log_id": "AwAAAYj-checkout-3", "timestamp": "2026-05-11T03:48:34Z", "message": "ConnectionPoolTimeout: timed out waiting for a connection (pool size: 10, in use: 10)"}
+        ]
+      },
+      "metrics": {
+        "cpu_pct":         {"baseline": 18,  "peak": 22,   "peak_at": "2026-05-11T03:42:00Z", "verdict": "NORMAL"},
+        "mem_pct":         {"baseline": 61,  "peak": 63,   "peak_at": "2026-05-11T03:42:00Z", "verdict": "NORMAL"},
+        "request_rate":    {"baseline": 240, "peak": 247,  "peak_at": "2026-05-11T03:42:00Z", "verdict": "NORMAL"},
+        "error_rate_pct":  {"baseline": 0.2, "peak": 38.4, "peak_at": "2026-05-11T03:48:00Z", "verdict": "SPIKE (192x)"},
+        "latency_p99_ms":  {"baseline": 180, "peak": 9840, "peak_at": "2026-05-11T03:48:00Z", "verdict": "SPIKE (55x)"}
+      },
+      "traces": {
+        "traces_inspected": 18,
+        "error_rate": "14/18",
+        "hot_span":   {"service": "checkout-api", "name": "redis.get",      "baseline_ms": 3,   "median_ms": 8430, "ratio": "2810x", "verdict": "SLOW"},
+        "other_span": {"service": "checkout-api", "name": "postgres.query", "baseline_ms": 22,  "median_ms": 24,   "ratio": "1.1x",  "verdict": "NORMAL"},
+        "downstream_suspect": "redis-prod (8.4s timeouts on `.get` — pool exhaustion or network issue)",
+        "sample_trace_ids": [
+          {"trace_id": "abc123def456", "duration_ms": 8612, "errored": true},
+          {"trace_id": "def456ghi789", "duration_ms": 8430, "errored": true}
+        ]
+      },
+      "deploys": {
+        "deploys": [
+          {
+            "service": "checkout-api",
+            "sha": "a1b2c3d",
+            "pr_url": "https://github.com/acme/checkout-api/pull/4421",
+            "pr_title": "Bump redis-client to 5.0.1",
+            "author": "alice",
+            "deployed_at": "2026-05-11T03:14:00Z",
+            "minutes_before": 28,
+            "suspect": "HIGH"
+          },
+          {
+            "service": "payment-api",
+            "sha": "9f8e7d6",
+            "pr_url": "https://github.com/acme/payment-api/pull/4419",
+            "pr_title": "Add JPY currency support",
+            "author": "bob",
+            "deployed_at": "2026-05-11T00:42:00Z",
+            "minutes_before": 180,
+            "suspect": "LOW"
+          }
+        ],
+        "config_changes": []
+      },
+      "expected_hypothesis": {
+        "top": "Recent checkout-api deploy (redis-client 5.0.1, PR #4421, 28 min before alert) introduced a regression that exhausts the redis connection pool. The new client version likely changed default pool/timeout behaviour.",
+        "confidence": 0.87,
+        "supporting_evidence": ["logs", "metrics", "traces", "deploys"]
+      },
+      "expected_remediation": [
+        {
+          "action": "kubectl -n prod rollout undo deployment/checkout-api",
+          "risk": "LOW",
+          "why": "Reverts the suspect deploy; cheapest test of the hypothesis."
+        },
+        {
+          "action": "kubectl -n prod set env deployment/checkout-api REDIS_POOL_SIZE=40 && kubectl -n prod rollout restart deployment/checkout-api",
+          "risk": "MEDIUM",
+          "why": "If rollback doesn't fix it, larger pool gives headroom while we investigate."
+        }
+      ]
+    },
+    {
+      "id": "false-positive",
+      "label": "Alert fired but no real issue (false positive)",
+      "alert": {
+        "service": "search-api",
+        "severity": "SEV-3",
+        "description": "search-api p99 latency > 500ms briefly",
+        "tags": ["env:prod", "team:search"]
+      },
+      "logs": {
+        "hits": 3,
+        "first_at": "2026-05-11T04:01:00Z",
+        "peak_at": "2026-05-11T04:01:00Z",
+        "top_messages": [
+          {"count": 3, "message": "warn: slow query detected for user_id:12345 (482ms)"}
+        ],
+        "samples": [{"log_id": "AwAAAYj-search-1", "timestamp": "2026-05-11T04:01:12Z", "message": "warn: slow query detected for user_id:12345 (482ms)"}]
+      },
+      "metrics": {
+        "cpu_pct":        {"baseline": 12, "peak": 14,  "peak_at": "2026-05-11T04:01:00Z", "verdict": "NORMAL"},
+        "mem_pct":        {"baseline": 45, "peak": 47,  "peak_at": "2026-05-11T04:01:00Z", "verdict": "NORMAL"},
+        "request_rate":   {"baseline": 80, "peak": 82,  "peak_at": "2026-05-11T04:01:00Z", "verdict": "NORMAL"},
+        "error_rate_pct": {"baseline": 0.1, "peak": 0.1, "peak_at": "2026-05-11T04:01:00Z", "verdict": "NORMAL"},
+        "latency_p99_ms": {"baseline": 220, "peak": 502, "peak_at": "2026-05-11T04:01:00Z", "verdict": "BRIEF SPIKE (2.3x for 1 min only)"}
+      },
+      "traces": {
+        "traces_inspected": 20,
+        "error_rate": "0/20",
+        "hot_span":   null,
+        "downstream_suspect": null,
+        "sample_trace_ids": []
+      },
+      "deploys": {
+        "deploys": [],
+        "config_changes": []
+      },
+      "expected_hypothesis": {
+        "top": "Single slow query for one user_id caused a 1-minute p99 blip. No deploys, no error rate change, no trace anomalies. Likely a single noisy customer, not a service issue.",
+        "confidence": 0.78,
+        "supporting_evidence": ["logs", "metrics", "traces", "deploys"]
+      },
+      "expected_remediation": [
+        {
+          "action": "No remediation needed. Consider tuning the alert threshold or excluding outlier queries.",
+          "risk": "LOW",
+          "why": "Brief 1-minute blip from one user; service is healthy."
+        }
+      ]
+    },
+    {
+      "id": "downstream-cascade",
+      "label": "Downstream service cascade failure",
+      "alert": {
+        "service": "user-profile-api",
+        "severity": "SEV-1",
+        "description": "user-profile-api 100% 502 errors, all requests failing",
+        "tags": ["env:prod", "team:identity"]
+      },
+      "logs": {
+        "hits": 8214,
+        "first_at": "2026-05-11T07:02:00Z",
+        "peak_at": "2026-05-11T07:03:00Z",
+        "top_messages": [
+          {"count": 6890, "message": "Failed to fetch from auth-service: HTTP 502 Bad Gateway (upstream timeout)"},
+          {"count": 1102, "message": "Circuit breaker OPEN for auth-service (60s cooldown)"},
+          {"count": 222,  "message": "Failed to fetch from auth-service: connection refused"}
+        ],
+        "samples": [
+          {"log_id": "AwAAAYj-prof-1", "timestamp": "2026-05-11T07:03:00Z", "message": "Failed to fetch from auth-service: HTTP 502 Bad Gateway (upstream timeout)"}
+        ]
+      },
+      "metrics": {
+        "cpu_pct":         {"baseline": 32, "peak": 30,  "peak_at": "2026-05-11T07:02:00Z", "verdict": "NORMAL"},
+        "mem_pct":         {"baseline": 58, "peak": 58,  "peak_at": "2026-05-11T07:02:00Z", "verdict": "NORMAL"},
+        "request_rate":    {"baseline": 480, "peak": 480, "peak_at": "2026-05-11T07:02:00Z", "verdict": "NORMAL"},
+        "error_rate_pct":  {"baseline": 0.05, "peak": 99.8, "peak_at": "2026-05-11T07:02:00Z", "verdict": "SPIKE (~2000x)"},
+        "latency_p99_ms":  {"baseline": 95, "peak": 3050, "peak_at": "2026-05-11T07:02:00Z", "verdict": "SPIKE (32x — circuit breaker timeout)"}
+      },
+      "traces": {
+        "traces_inspected": 25,
+        "error_rate": "25/25",
+        "hot_span": {"service": "user-profile-api", "name": "http.fetch auth-service", "baseline_ms": 12, "median_ms": 3000, "ratio": "250x", "verdict": "FAILED"},
+        "downstream_suspect": "auth-service (every request to it times out at 3s — circuit breaker open)",
+        "sample_trace_ids": [
+          {"trace_id": "cascade-001", "duration_ms": 3052, "errored": true},
+          {"trace_id": "cascade-002", "duration_ms": 3050, "errored": true}
+        ]
+      },
+      "deploys": {
+        "deploys": [
+          {
+            "service": "auth-service",
+            "sha": "f00bar1",
+            "pr_url": "https://github.com/acme/auth-service/pull/801",
+            "pr_title": "Switch to new JWT library",
+            "author": "carol",
+            "deployed_at": "2026-05-11T06:55:00Z",
+            "minutes_before": 7,
+            "suspect": "HIGH"
+          }
+        ],
+        "config_changes": []
+      },
+      "expected_hypothesis": {
+        "top": "auth-service deploy 7 min before alert (PR #801, 'Switch to new JWT library') is failing all incoming requests. user-profile-api is healthy itself but cannot get auth tokens — circuit breaker is open and every request fails fast. Real fix is in auth-service, not here.",
+        "confidence": 0.95,
+        "supporting_evidence": ["logs", "metrics", "traces", "deploys"]
+      },
+      "expected_remediation": [
+        {
+          "action": "kubectl -n prod rollout undo deployment/auth-service",
+          "risk": "LOW",
+          "why": "Roll back the suspect auth-service deploy. user-profile-api will recover automatically as soon as auth-service responds again."
+        },
+        {
+          "action": "Do NOT roll back user-profile-api. It is healthy. The fault is in auth-service.",
+          "risk": "NONE (anti-action)",
+          "why": "Common mistake — blaming the service that's alerting. The alert tells you who notices, not who's broken."
+        }
+      ]
+    }
+  ]
+}

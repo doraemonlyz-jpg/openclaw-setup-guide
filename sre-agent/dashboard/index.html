@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SRE COMMAND CENTER</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ───────── Top bar ───────── -->
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">◤◢</div>
+    <div class="title">SRE COMMAND CENTER<span class="badge">v0</span></div>
+  </div>
+  <div class="stats">
+    <span class="stat"><span class="dot dot-cyan"></span>ACTIVE <b id="stat-active">0</b></span>
+    <span class="stat"><span class="dot dot-mag"></span>DIAGNOSED <b id="stat-diag">0</b></span>
+    <span class="stat"><span class="dot dot-grn"></span>MTTI <b id="stat-mtti">—</b></span>
+    <button id="btn-fire" class="btn-fire">+ FIRE ALERT</button>
+  </div>
+</header>
+
+<!-- ───────── Main 3-column layout ───────── -->
+<main class="grid">
+  <!-- Column 1: Incident list -->
+  <aside class="col col-alerts">
+    <div class="col-header">ACTIVE ALERTS</div>
+    <ul id="incident-list" class="incident-list">
+      <li class="empty">No incidents yet — click <b>FIRE ALERT</b> to start a demo.</li>
+    </ul>
+  </aside>
+
+  <!-- Column 2: Incident detail -->
+  <section class="col col-detail">
+    <div class="col-header" id="detail-header">SELECT AN INCIDENT</div>
+    <div id="detail-body" class="detail-body">
+      <div class="empty-detail">
+        <div class="empty-graphic">◤ ◢</div>
+        <p>Pick an incident from the left, or fire a new demo alert.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Column 3: Live agent activity -->
+  <aside class="col col-activity">
+    <div class="col-header">AGENT LIVE LOG</div>
+    <ul id="activity-log" class="activity-log">
+      <li class="empty">— idle —</li>
+    </ul>
+  </aside>
+</main>
+
+<!-- ───────── Fire alert modal ───────── -->
+<div id="fire-modal" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-title">FIRE A DEMO ALERT</div>
+    <p class="modal-sub">Choose a scenario. The dashboard will simulate the full multi-agent diagnosis pipeline.</p>
+    <ul id="scenario-list" class="scenario-list"><!-- populated --></ul>
+    <div class="modal-actions">
+      <button id="btn-modal-close" class="btn-secondary">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
