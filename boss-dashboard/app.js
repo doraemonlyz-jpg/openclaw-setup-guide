@@ -4,6 +4,7 @@ const POLL_AGENTS_MS = 4000;
 const POLL_PROJECTS_MS = 6000;
 const POLL_ACTIVITY_MS = 3000;
 const POLL_BOSS_LOG_MS = 2500;
+const POLL_STATUS_MS = 5000;
 
 let activeProject = null;
 let activeFile = null;
@@ -73,6 +74,8 @@ async function refreshAgents() {
 }
 
 // ──────── projects ────────
+let lastProjectPhases = {}; // slug -> phase, used for completion detection in refreshProjects
+
 async function refreshProjects() {
   try {
     const r = await fetch("/api/projects");
@@ -80,10 +83,13 @@ async function refreshProjects() {
     const list = $("#projects-list");
     list.innerHTML = "";
     for (const p of d.projects) {
+      const phase = (lastRunStatus[p.slug] || {}).phase || "?";
+      const phaseHtml = phase !== "?" ?
+        `<span class="proj-phase phase-${escapeHtml(phase)}">${escapeHtml(phase.toUpperCase())}</span>` : "";
       const item = el("div", "project-item" + (activeProject === p.slug ? " active" : ""));
       item.dataset.slug = p.slug;
       item.innerHTML = `
-        <div class="project-name">${escapeHtml(p.slug)}</div>
+        <div class="project-name">${escapeHtml(p.slug)}${phaseHtml}</div>
         <div class="project-meta">
           <span>📄 ${p.files.length} files</span>
           <span>${fmtAgo(p.modified)}</span>
@@ -346,9 +352,211 @@ async function refreshBossLog() {
   } catch (e) {}
 }
 
+// ════════════════════════════════════════════════════════════════
+// COMPLETION DETECTION  →  banner + desktop notification + chime
+// ════════════════════════════════════════════════════════════════
+//
+// Strategy: poll /api/run-status every 5s. Track each project's last
+// known phase. When a project transitions running→complete (or shows up
+// already-complete on a fresh page load with mtime within last 5min),
+// fire all three signals — once per project per page session.
+
+let lastRunStatus = {};            // slug -> last status object
+let firedCompletions = new Set();  // slugs we've already celebrated
+let firstStatusRender = true;
+let audioCtx = null;
+
+function getAudioCtx() {
+  // Lazy-create — browsers require user gesture before first playback,
+  // but the AudioContext itself can exist; we just stay quiet until one.
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch { audioCtx = null; }
+  }
+  return audioCtx;
+}
+
+// Quick cyberpunk chime: rising 3-note arpeggio with a soft sweep.
+function playCompletionChime() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+  const t0 = ctx.currentTime;
+  const notes = [
+    { f: 660,  d: 0.18, t: 0.00 },  // E5
+    { f: 880,  d: 0.18, t: 0.10 },  // A5
+    { f: 1320, d: 0.32, t: 0.22 },  // E6
+  ];
+  for (const n of notes) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(n.f, t0 + n.t);
+    osc.frequency.exponentialRampToValueAtTime(n.f * 1.005, t0 + n.t + n.d);
+    gain.gain.setValueAtTime(0, t0 + n.t);
+    gain.gain.linearRampToValueAtTime(0.18, t0 + n.t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0005, t0 + n.t + n.d);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t0 + n.t);
+    osc.stop(t0 + n.t + n.d + 0.05);
+  }
+  // Sub-bass thump on the resolution
+  try {
+    const sub = ctx.createOscillator();
+    const subGain = ctx.createGain();
+    sub.type = "sine";
+    sub.frequency.setValueAtTime(110, t0 + 0.22);
+    sub.frequency.exponentialRampToValueAtTime(55, t0 + 0.6);
+    subGain.gain.setValueAtTime(0, t0 + 0.22);
+    subGain.gain.linearRampToValueAtTime(0.25, t0 + 0.25);
+    subGain.gain.exponentialRampToValueAtTime(0.0005, t0 + 0.7);
+    sub.connect(subGain).connect(ctx.destination);
+    sub.start(t0 + 0.22);
+    sub.stop(t0 + 0.75);
+  } catch {}
+}
+
+function fmtDuration(seconds) {
+  if (!seconds || seconds < 0) return "—";
+  if (seconds < 60) return seconds + "s";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m < 60) return `${m}m ${s}s`;
+  return `${Math.floor(m/60)}h ${m%60}m`;
+}
+
+function showCompletionBanner(proj) {
+  const banner = $("#completion-banner");
+  $("#cb-title").textContent = `${proj.slug.toUpperCase()} · DELIVERED`;
+  const filesNum = `<span class="num">${proj.file_count}</span>`;
+  const durNum = `<span class="num">${fmtDuration(proj.duration_sec)}</span>`;
+  const summary = (proj.explicit && proj.explicit.summary) || "ready to run";
+  $("#cb-meta").innerHTML =
+    `${filesNum} files · built in ${durNum} · ${escapeHtml(summary)}`;
+
+  banner.classList.remove("hidden");
+  // tick to allow the slide-in transition
+  requestAnimationFrame(() => banner.classList.add("visible"));
+
+  $("#cb-open").onclick = () => {
+    dismissBanner();
+    // Try to open the project in the projects column
+    const list = $("#projects-list");
+    const item = list.querySelector(`[data-slug="${CSS.escape(proj.slug)}"]`);
+    if (item) item.click();
+  };
+}
+function dismissBanner() {
+  const banner = $("#completion-banner");
+  banner.classList.remove("visible");
+  setTimeout(() => banner.classList.add("hidden"), 700);
+}
+$("#cb-dismiss").addEventListener("click", dismissBanner);
+
+function fireDesktopNotification(proj) {
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  try {
+    const n = new Notification("✅ AI Studio — Project Delivered", {
+      body: `${proj.slug} · ${proj.file_count} files · built in ${fmtDuration(proj.duration_sec)}\nClick to open dashboard.`,
+      tag: `delivery-${proj.slug}`,
+      requireInteraction: false,
+      silent: false,
+    });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch (e) { console.warn("notification failed:", e); }
+}
+
+function celebrateCompletion(proj) {
+  if (firedCompletions.has(proj.slug)) return;
+  firedCompletions.add(proj.slug);
+  showCompletionBanner(proj);
+  playCompletionChime();
+  fireDesktopNotification(proj);
+  // Also drop a subtle title-bar marker so a backgrounded tab gets noticed
+  document.title = `✅ ${proj.slug} done · BOSS_CONSOLE`;
+  setTimeout(() => { document.title = "// BOSS_CONSOLE :: AI_STUDIO //"; }, 30000);
+}
+
+async function refreshRunStatus() {
+  try {
+    const r = await fetch("/api/run-status");
+    const d = await r.json();
+    const now = d.now || Math.floor(Date.now() / 1000);
+
+    for (const proj of d.projects) {
+      const prev = lastRunStatus[proj.slug];
+      lastRunStatus[proj.slug] = proj;
+
+      // Don't celebrate stuff we discover already-complete on first load
+      // unless it finished in the last 5 minutes (likely we just missed it
+      // because the page was loading).
+      const finishedRecently = (now - proj.last_file_mtime) < 300;
+
+      let isCompletionEvent = false;
+      if (firstStatusRender) {
+        if (proj.phase === "complete" && finishedRecently && !firedCompletions.has(proj.slug)) {
+          isCompletionEvent = true;
+        } else if (proj.phase === "complete") {
+          // already-done long ago — mark as "seen" so we don't fire later
+          firedCompletions.add(proj.slug);
+        }
+      } else if (prev && prev.phase !== "complete" && proj.phase === "complete") {
+        isCompletionEvent = true;
+      }
+
+      if (isCompletionEvent) celebrateCompletion(proj);
+    }
+    firstStatusRender = false;
+  } catch (e) {
+    console.warn("run-status refresh failed:", e);
+  }
+}
+
+// ──────── notify permission toggle ────────
+function paintNotifyBtn() {
+  const btn = $("#notify-toggle");
+  const icon = $("#notify-icon");
+  const label = $("#notify-label");
+  if (!("Notification" in window)) {
+    btn.classList.add("denied");
+    icon.textContent = "🚫"; label.textContent = "UNSUPPORTED";
+    btn.disabled = true; return;
+  }
+  const p = Notification.permission;
+  btn.classList.toggle("granted", p === "granted");
+  btn.classList.toggle("denied", p === "denied");
+  if (p === "granted") { icon.textContent = "🔔"; label.textContent = "ARMED"; }
+  else if (p === "denied") { icon.textContent = "🚫"; label.textContent = "BLOCKED"; }
+  else { icon.textContent = "🔕"; label.textContent = "ENABLE"; }
+}
+$("#notify-toggle").addEventListener("click", async () => {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "default") {
+    try { await Notification.requestPermission(); } catch {}
+  } else if (Notification.permission === "granted") {
+    // Tap to test sound + banner
+    playCompletionChime();
+    showCompletionBanner({
+      slug: "test-signal",
+      file_count: 0,
+      duration_sec: 0,
+      explicit: { summary: "test chime — system ready" },
+    });
+  }
+  // First click also unlocks AudioContext (browser requires user gesture)
+  const ctx = getAudioCtx();
+  if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+  paintNotifyBtn();
+});
+
 // ──────── kick off ────────
+paintNotifyBtn();
 refreshAgents();    setInterval(refreshAgents, POLL_AGENTS_MS);
-refreshProjects();  setInterval(refreshProjects, POLL_PROJECTS_MS);
+// refreshRunStatus runs first so refreshProjects has phase data
+refreshRunStatus().then(refreshProjects);
+setInterval(refreshRunStatus, POLL_STATUS_MS);
+setInterval(refreshProjects, POLL_PROJECTS_MS);
 refreshActivity();  setInterval(refreshActivity, POLL_ACTIVITY_MS);
 refreshBossLog();   setInterval(refreshBossLog, POLL_BOSS_LOG_MS);
 refreshHud();       setInterval(refreshHud, 1000);

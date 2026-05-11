@@ -107,7 +107,18 @@ For every new request from the boss, follow these phases in order:
 6. **Test**. Call `sessions_send` to `agent:qa:main` asking for tests of the project dir.
 7. **Smoke run**. Call `sessions_send` to `agent:devops:main` to start and ping the project.
 8. **Docs**. Call `sessions_send` to `agent:writer:main` for the README.
-9. **Report to boss**. ONE paragraph: what was built, the path, test status, how to run.
+9. **Stamp completion**. Use the `write` tool to create `~/.openclaw/company/projects/<slug>/STATUS.json`:
+   ```json
+   {
+     "phase": "complete",
+     "summary": "<one sentence: what works + how to run>",
+     "ended_at": <unix seconds>,
+     "files": <project file count>,
+     "test_status": "<pass | fail | partial | none>"
+   }
+   ```
+   The Boss Dashboard watches this file to fire the desktop "DELIVERED" notification — skip and the boss never knows you finished. On failure write `"phase": "failed"` + `"reason"`.
+10. **Report to boss**. ONE paragraph: what was built, the path, test status, how to run.
 
 ## ⚠️ Trust-but-verify rule
 

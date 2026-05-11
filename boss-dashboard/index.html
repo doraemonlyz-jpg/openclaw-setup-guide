@@ -12,6 +12,23 @@
   <div class="scanlines" aria-hidden="true"></div>
   <div class="glitch-overlay" aria-hidden="true"></div>
 
+  <!-- ─── Completion banner ─── -->
+  <!-- Fires once when a project transitions running→complete. -->
+  <div id="completion-banner" class="completion-banner hidden" role="alert">
+    <div class="cb-glitch" data-text="◤ DELIVERED ◢">◤ DELIVERED ◢</div>
+    <div class="cb-body">
+      <div class="cb-icon">✓</div>
+      <div class="cb-text">
+        <div class="cb-title" id="cb-title">PROJECT COMPLETE</div>
+        <div class="cb-meta" id="cb-meta">—</div>
+      </div>
+      <div class="cb-actions">
+        <button id="cb-open" class="cb-btn">OPEN</button>
+        <button id="cb-dismiss" class="cb-btn cb-btn-ghost">DISMISS</button>
+      </div>
+    </div>
+  </div>
+
   <header class="topbar">
     <div class="brand">
       <span class="brand-mark">⌬</span>
@@ -33,6 +50,9 @@
       <span class="dot dot-on"></span>
       <span id="status-text">UPLINK_ACTIVE</span>
       <span class="meta" id="updated-at">—</span>
+      <button id="notify-toggle" class="notify-btn" title="Enable desktop notifications when a project completes">
+        <span id="notify-icon">🔕</span><span id="notify-label">NOTIFY</span>
+      </button>
     </div>
   </header>
 

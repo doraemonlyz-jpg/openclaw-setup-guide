@@ -215,6 +215,113 @@ def api_project_file(slug: str):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/run-status")
+def api_run_status():
+    """Per-project run status + global agent activity.
+
+    Frontend uses this to detect running→complete transitions and fire
+    desktop notifications, sound, and the completion banner.
+
+    Status sources, in priority order:
+      1. STATUS.json in the project dir (authoritative — PM writes it)
+      2. Heuristic: file mtimes + agent session activity
+    """
+    now = time.time()
+
+    # Global: which agents have been touched in the last minute?
+    busy_agents: list[str] = []
+    most_recent_agent_activity = 0
+    for aid, *_ in COMPANY_AGENTS:
+        sess = latest_session_jsonl(aid)
+        if not sess:
+            continue
+        m = sess.stat().st_mtime
+        most_recent_agent_activity = max(most_recent_agent_activity, m)
+        if now - m < 60:
+            busy_agents.append(aid)
+    any_agent_active = bool(busy_agents)
+
+    projects: list[dict[str, Any]] = []
+    if PROJECTS.exists():
+        for p in sorted(PROJECTS.iterdir(),
+                        key=lambda x: -x.stat().st_mtime if x.is_dir() else 0):
+            if not p.is_dir():
+                continue
+
+            # Skip noise dirs (cache, venv, deps) — they confuse "recently modified"
+            ignore_parts = {"__pycache__", ".venv", "venv", "node_modules",
+                            ".git", "dist", "build", ".pytest_cache", ".mypy_cache"}
+            files = [
+                f for f in p.rglob("*")
+                if f.is_file()
+                and not f.name.startswith(".")
+                and not (set(f.relative_to(p).parts) & ignore_parts)
+            ]
+            file_count = len(files)
+            mtimes = [f.stat().st_mtime for f in files] or [p.stat().st_mtime]
+            last_file_mtime = max(mtimes)
+            first_file_mtime = min(mtimes) if files else last_file_mtime
+
+            has_readme = (p / "README.md").exists()
+            code_exts = {".py", ".js", ".ts", ".jsx", ".tsx", ".go",
+                         ".rs", ".java", ".html", ".css", ".sh"}
+            has_code = any(f.suffix in code_exts for f in files)
+
+            # Was this project touched recently?
+            recently_modified = (now - last_file_mtime) < 90
+
+            # Read explicit STATUS.json if present
+            explicit: dict[str, Any] | None = None
+            sj = p / "STATUS.json"
+            if sj.exists():
+                try:
+                    explicit = json.loads(sj.read_text())
+                except Exception:
+                    explicit = None
+
+            # Decide phase. STATUS.json wins; otherwise project-local mtime
+            # is the only "running" signal — global agent activity does NOT
+            # imply this particular project is being worked on.
+            if explicit and explicit.get("phase"):
+                phase = explicit["phase"]
+                source = "explicit"
+            elif recently_modified:
+                phase = "running"
+                source = "heuristic"
+            elif has_readme and has_code:
+                phase = "complete"
+                source = "heuristic"
+            elif file_count > 0:
+                phase = "stalled"
+                source = "heuristic"
+            else:
+                phase = "empty"
+                source = "heuristic"
+
+            projects.append({
+                "slug": p.name,
+                "phase": phase,
+                "source": source,
+                "started_at": int(first_file_mtime),
+                "last_file_mtime": int(last_file_mtime),
+                "ended_at": int(explicit.get("ended_at", last_file_mtime)) if explicit else int(last_file_mtime),
+                "duration_sec": int(last_file_mtime - first_file_mtime),
+                "file_count": file_count,
+                "has_readme": has_readme,
+                "has_code": has_code,
+                "recently_modified": recently_modified,
+                "explicit": explicit,
+            })
+
+    return jsonify({
+        "now": int(now),
+        "any_agent_active": any_agent_active,
+        "busy_agents": busy_agents,
+        "most_recent_agent_activity": int(most_recent_agent_activity),
+        "projects": projects,
+    })
+
+
 @app.route("/api/activity")
 def api_activity():
     """Combined timeline of recent messages across all company agents."""
