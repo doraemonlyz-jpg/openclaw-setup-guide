@@ -147,44 +147,30 @@ OpenClaw 走的是粗粒度路线：`bash`、`read`、`write`、`edit`、`sessio
 
 ## 4. ReAct 循环：Agent 的心跳
 
-```
-┌─────────────────────────────────────────┐
-│  user: "帮我看下 ~/projects/foo 大小"  │
-└──────────────────┬──────────────────────┘
-                   ▼
-┌─────────────────────────────────────────┐
-│ messages = [system, user]               │
-└──────────────────┬──────────────────────┘
-                   ▼
-┌──────── LLM 推理 ────────┐
-│ 输出：                    │
-│   tool_call("bash",       │
-│     {command: "du -sh     │
-│      ~/projects/foo"})    │
-└──────────────────┬────────┘
-                   ▼
-┌─────────────────────────────────────────┐
-│ Agent 框架检查 allowlist：bash 允许 ✓  │
-│ 执行：subprocess.run("du -sh ...")      │
-│ 拿到结果："4.2M /home/me/projects/foo" │
-└──────────────────┬──────────────────────┘
-                   ▼
-┌─────────────────────────────────────────┐
-│ messages.append({                       │
-│   role: "tool",                         │
-│   tool_call_id: "...",                  │
-│   content: "4.2M /home/me/projects/foo"│
-│ })                                       │
-└──────────────────┬──────────────────────┘
-                   ▼
-┌──────── LLM 推理（再次） ────────┐
-│ 输出：                            │
-│   "你的 foo 项目大小是 4.2 MB。"  │
-│   (没有 tool_call 了)             │
-└──────────────────┬────────────────┘
-                   ▼
-                Agent 退出循环
-                把最终回复返回给用户
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as 👤 User
+    participant A as ⚙️ Agent Framework
+    participant L as 🧠 LLM
+    participant T as 🔧 Tool (bash)
+
+    U->>A: "帮我看下 ~/projects/foo 大小"
+    A->>A: messages = [system, user]
+    A->>L: chat.completions(messages, tools)
+    L-->>A: tool_call("bash",<br/>{command: "du -sh ~/projects/foo"})
+
+    A->>A: ✓ allowlist check (bash 允许)
+    A->>T: subprocess.run("du -sh ...")
+    T-->>A: "4.2M /home/me/projects/foo"
+
+    A->>A: messages.append({role: "tool", content: "4.2M ..."})
+    A->>L: chat.completions(messages, tools)
+    L-->>A: "你的 foo 项目大小是 4.2 MB"<br/>(no tool_call ⇒ done)
+
+    A-->>U: 最终回复
+
+    Note over A,L: 退出条件：无 tool_call / 达 max_iter / 超 token / 超时 / 中断
 ```
 
 **循环退出条件**（按重要性）：

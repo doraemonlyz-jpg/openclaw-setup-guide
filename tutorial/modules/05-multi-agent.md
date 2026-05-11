@@ -35,14 +35,31 @@
 
 ### 2.1 模式 A：Hub-and-Spoke（中心辐射）
 
-```
-              ┌──────┐
-              │  PM  │ ← 唯一对外接口
-              └──┬───┘
-                 │
-   ┌──────┬─────┴─────┬──────┐
-   ▼      ▼            ▼      ▼
-techlead  qa        eng-be  eng-fe
+```mermaid
+flowchart TD
+    Boss(["👤 Boss"])
+    PM(("🎯 <b>PM</b><br/><span style='font-size:10px'>唯一对外接口</span>"))
+    TL["📐 techlead"]
+    DE["🎨 designer"]
+    BE["⚙️ eng-be"]
+    FE["🖥️ eng-fe"]
+    QA["🧪 qa"]
+    DO["🚀 devops"]
+
+    Boss <-.->|对话| PM
+    PM --> TL
+    PM --> DE
+    PM --> BE
+    PM --> FE
+    PM --> QA
+    PM --> DO
+
+    classDef boss fill:#3d2155,stroke:#ff4dca,stroke-width:3px,color:#fff
+    classDef hub  fill:#2a1f4d,stroke:#b84dff,stroke-width:3px,color:#fff
+    classDef wkr  fill:#1a2342,stroke:#00f0ff,stroke-width:2px,color:#e8edf7
+    class Boss boss
+    class PM hub
+    class TL,DE,BE,FE,QA,DO wkr
 ```
 
 **特点**：
@@ -63,8 +80,17 @@ techlead  qa        eng-be  eng-fe
 
 ### 2.2 模式 B：Pipeline（流水线）
 
-```
-user → A → B → C → D → output
+```mermaid
+flowchart LR
+    U(["👤 user"]) --> A["🔵 Agent A<br/><span style='font-size:11px;color:#94a3c4'>parse</span>"]
+    A --> B["🟣 Agent B<br/><span style='font-size:11px;color:#94a3c4'>plan</span>"]
+    B --> C["🟢 Agent C<br/><span style='font-size:11px;color:#94a3c4'>do</span>"]
+    C --> D["🟡 Agent D<br/><span style='font-size:11px;color:#94a3c4'>verify</span>"]
+    D --> O(["📤 output"])
+    classDef u fill:#3d2155,stroke:#ff4dca,stroke-width:2px,color:#fff
+    classDef a fill:#1a2342,stroke:#00f0ff,stroke-width:2px,color:#e8edf7
+    class U,O u
+    class A,B,C,D a
 ```
 
 **特点**：
@@ -83,10 +109,16 @@ user → A → B → C → D → output
 
 ### 2.3 模式 C：Peer-to-Peer / Swarm（蜂群）
 
-```
-   A ─── B
-   │  ╳  │
-   C ─── D
+```mermaid
+flowchart LR
+    A(("🔵 A")) <--> B(("🟣 B"))
+    A <--> C(("🟢 C"))
+    A <--> D(("🟡 D"))
+    B <--> C
+    B <--> D
+    C <--> D
+    classDef peer fill:#1a2342,stroke:#00f0ff,stroke-width:2px,color:#e8edf7
+    class A,B,C,D peer
 ```
 
 **特点**：
@@ -109,8 +141,22 @@ user → A → B → C → D → output
 
 ### 2.4 模式 D：Marketplace / Auction（市场）
 
-```
-任务 ──→ 拍卖板 ──→ 多个 Agent 竞标 ──→ 最便宜的赢得
+```mermaid
+flowchart LR
+    T(["📋 任务"]) --> AB["🪧 <b>拍卖板</b><br/><span style='font-size:11px;color:#94a3c4'>broadcast</span>"]
+    AB -.bid $0.04.-> A["Agent A"]
+    AB -.bid $0.02.-> B["Agent B ⭐"]
+    AB -.bid $0.07.-> C["Agent C"]
+    AB -.bid $0.05.-> D["Agent D"]
+    B ==win==> Done(["✅ 执行任务"])
+    classDef task fill:#3d2155,stroke:#ff4dca,stroke-width:2px,color:#fff
+    classDef board fill:#2a1f4d,stroke:#b84dff,stroke-width:2px,color:#fff
+    classDef agent fill:#1a2342,stroke:#00f0ff,stroke-width:2px,color:#e8edf7
+    classDef winner fill:#1c3a2a,stroke:#4dffaa,stroke-width:3px,color:#fff
+    class T task
+    class AB board
+    class A,C,D agent
+    class B,Done winner
 ```
 
 **特点**：
@@ -130,13 +176,23 @@ user → A → B → C → D → output
 
 ### 2.5 模式 E：Blackboard（黑板）
 
-```
-       ┌─────── Blackboard (共享状态) ───────┐
-       │                                     │
-       └──┬──────┬──────┬──────┬──────┬──────┘
-          ▼      ▼      ▼      ▼      ▼
-          A      B      C      D      E
-        (各自读黑板，发现自己能做的事就做)
+```mermaid
+flowchart TD
+    BB["📋 <b>Blackboard</b><br/><span style='font-size:11px;color:#94a3c4'>共享状态 = single source of truth<br/>(projects/STATUS.json / vector DB / file tree)</span>"]
+    A["Agent A<br/><i>watches: SPEC.md</i>"]
+    B["Agent B<br/><i>watches: TASKS.md</i>"]
+    C["Agent C<br/><i>watches: code/*</i>"]
+    D["Agent D<br/><i>watches: TEST_REPORT.md</i>"]
+    E["Agent E<br/><i>watches: STATUS.json</i>"]
+    BB <-.read/write.-> A
+    BB <-.read/write.-> B
+    BB <-.read/write.-> C
+    BB <-.read/write.-> D
+    BB <-.read/write.-> E
+    classDef bb fill:#2a1f4d,stroke:#b84dff,stroke-width:3px,color:#fff
+    classDef a fill:#1a2342,stroke:#00f0ff,stroke-width:2px,color:#e8edf7
+    class BB bb
+    class A,B,C,D,E a
 ```
 
 **特点**：
@@ -208,13 +264,36 @@ Agent A 直接 HTTP 请求 Agent B。
 
 ### 3.5 我们项目的混合方案
 
-```
-boss → PM:           OpenClaw CLI (本质是 HTTP)
-PM → worker:         sessions_send (message queue 风格)
-worker 写产物:       Shared Filesystem (~/.openclaw/.../)
-PM 监控产物:         Shared Filesystem (read 文件)
-Dashboard 监控:      Shared Filesystem (扫描目录)
-Boss 触发 FIX:       HTTP (dashboard → openclaw spawn)
+```mermaid
+flowchart LR
+    Boss(["👤 Boss"])
+    DASH["📊 Dashboard"]
+    PM(("🎯 PM"))
+    W1["⚙️ eng-be"]
+    W2["🖥️ eng-fe"]
+    W3["🧪 qa"]
+    FS[("📁 Shared FS<br/>~/.openclaw/...")]
+
+    Boss -->|💬 HTTP / CLI| PM
+    Boss -->|🌐 浏览器| DASH
+    PM -.->|📨 sessions_send<br/>(message queue)| W1
+    PM -.->|📨 sessions_send| W2
+    PM -.->|📨 sessions_send| W3
+    W1 -->|✍️ write artifact| FS
+    W2 -->|✍️ write artifact| FS
+    W3 -->|✍️ write artifact| FS
+    PM -->|👀 read 验证| FS
+    DASH -->|🔍 scan| FS
+    DASH -->|🔧 spawn FIX| PM
+
+    classDef boss fill:#3d2155,stroke:#ff4dca,stroke-width:3px,color:#fff
+    classDef hub fill:#2a1f4d,stroke:#b84dff,stroke-width:2px,color:#fff
+    classDef wkr fill:#1a2342,stroke:#00f0ff,stroke-width:2px,color:#e8edf7
+    classDef fs fill:#1c3a2a,stroke:#4dffaa,stroke-width:2px,color:#fff
+    class Boss boss
+    class PM,DASH hub
+    class W1,W2,W3 wkr
+    class FS fs
 ```
 
 混合是常态。**没有一种通信方式能解决所有问题**。

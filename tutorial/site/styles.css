@@ -924,3 +924,77 @@ a:hover { opacity: 0.8; }
   text-transform: uppercase;
   letter-spacing: 1px;
 }
+
+/* ───────── Mermaid diagrams ───────── */
+.mermaid-wrap {
+  background: linear-gradient(135deg, #0c1120 0%, #131a2c 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 16px;
+  margin: 24px 0;
+  text-align: center;
+  position: relative;
+  overflow-x: auto;
+  box-shadow: var(--shadow-card);
+}
+
+/* corner brackets — cyberpunk feel */
+.mermaid-wrap::before,
+.mermaid-wrap::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--accent);
+  opacity: 0.7;
+}
+.mermaid-wrap::before {
+  top: 6px;
+  left: 6px;
+  border-right: none;
+  border-bottom: none;
+}
+.mermaid-wrap::after {
+  bottom: 6px;
+  right: 6px;
+  border-left: none;
+  border-top: none;
+}
+
+.mermaid {
+  display: inline-block;
+  max-width: 100%;
+}
+.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* nicer node shadows */
+.mermaid .node rect,
+.mermaid .node circle,
+.mermaid .node ellipse,
+.mermaid .node polygon,
+.mermaid .node path {
+  filter: drop-shadow(0 0 6px rgba(0, 240, 255, 0.25));
+}
+/* edge labels with our bg */
+.mermaid .edgeLabel {
+  background-color: var(--bg) !important;
+  color: var(--text-muted) !important;
+  font-size: 12px !important;
+}
+/* sequence diagram actor boxes */
+.mermaid .actor {
+  filter: drop-shadow(0 0 6px rgba(0, 240, 255, 0.3));
+}
+/* arrowheads pop */
+.mermaid marker path {
+  fill: var(--accent) !important;
+}
+/* loading state */
+.mermaid:not([data-processed="true"]) {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: pre;
+}

@@ -20,18 +20,86 @@ async function boot() {
   $('#footer-github').href = STATE.manifest.github;
   $('#path-github').href = STATE.manifest.github;
 
-  // setup marked
+  // setup marked — DON'T highlight mermaid blocks (we render them as SVG)
   marked.setOptions({
     gfm: true,
     breaks: false,
     headerIds: true,
     mangle: false,
     highlight: (code, lang) => {
+      if (lang === 'mermaid') return code;
       if (lang && hljs.getLanguage(lang)) {
         try { return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value; }
         catch { /* ignore */ }
       }
       return hljs.highlightAuto(code).value;
+    },
+  });
+
+  // setup mermaid with our cyberpunk theme
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: 'loose',
+    theme: 'base',
+    themeVariables: {
+      background: '#0a0e1a',
+      primaryColor: '#131a2c',
+      primaryTextColor: '#e8edf7',
+      primaryBorderColor: '#00f0ff',
+      lineColor: '#00f0ff',
+      secondaryColor: '#1e2944',
+      tertiaryColor: '#0c1120',
+      mainBkg: '#131a2c',
+      secondBkg: '#1e2944',
+      tertiaryBkg: '#0c1120',
+      fontFamily: 'Inter, -apple-system, sans-serif',
+      fontSize: '14px',
+
+      // sequence diagrams
+      actorBorder: '#00f0ff',
+      actorBkg: '#131a2c',
+      actorTextColor: '#e8edf7',
+      actorLineColor: '#94a3c4',
+      signalColor: '#e8edf7',
+      signalTextColor: '#e8edf7',
+      sequenceNumberColor: '#0a0e1a',
+      labelBoxBkgColor: '#131a2c',
+      labelBoxBorderColor: '#00f0ff',
+      labelTextColor: '#e8edf7',
+      noteBkgColor: '#1a2342',
+      noteTextColor: '#00f0ff',
+      noteBorderColor: '#00f0ff',
+      activationBorderColor: '#b84dff',
+      activationBkgColor: 'rgba(184, 77, 255, 0.15)',
+
+      // flowchart
+      nodeBorder: '#00f0ff',
+      clusterBkg: 'rgba(0, 240, 255, 0.05)',
+      clusterBorder: '#00f0ff',
+      defaultLinkColor: '#00f0ff',
+      titleColor: '#00f0ff',
+      edgeLabelBackground: '#0a0e1a',
+
+      // statediagram
+      labelColor: '#e8edf7',
+      errorBkgColor: 'rgba(255, 71, 87, 0.15)',
+      errorTextColor: '#ff4757',
+    },
+    flowchart: {
+      curve: 'basis',
+      htmlLabels: true,
+      padding: 14,
+    },
+    sequence: {
+      diagramMarginX: 24,
+      diagramMarginY: 14,
+      actorMargin: 50,
+      width: 130,
+      height: 50,
+      boxMargin: 8,
+      messageMargin: 36,
+      mirrorActors: false,
+      bottomMarginAdj: 8,
     },
   });
 
@@ -105,15 +173,35 @@ async function showModule(moduleId, anchor) {
   const md = await loadModule(mod.id);
   content.innerHTML = marked.parse(md);
 
-  // assign data-lang to <pre> blocks
+  // first: convert ```mermaid code blocks to <div class="mermaid">
+  $$('pre code.language-mermaid', content).forEach(codeEl => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'mermaid-wrap';
+    const div = document.createElement('div');
+    div.className = 'mermaid';
+    div.textContent = codeEl.textContent;
+    wrapper.appendChild(div);
+    codeEl.parentElement.replaceWith(wrapper);
+  });
+
+  // assign data-lang to remaining <pre> blocks + highlight
   $$('pre code', content).forEach(codeEl => {
     const cls = codeEl.className.match(/language-(\w+)/);
     if (cls) {
       codeEl.parentElement.setAttribute('data-lang', cls[1]);
     }
-    // re-highlight if needed
     hljs.highlightElement(codeEl);
   });
+
+  // render mermaid diagrams
+  const mermaidNodes = $$('.mermaid', content);
+  if (mermaidNodes.length) {
+    try {
+      await mermaid.run({ nodes: mermaidNodes });
+    } catch (e) {
+      console.warn('mermaid render error', e);
+    }
+  }
 
   // build page outline (h2 + h3)
   buildPageOutline(content);

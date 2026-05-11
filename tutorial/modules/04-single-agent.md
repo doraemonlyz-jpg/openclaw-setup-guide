@@ -9,28 +9,40 @@
 
 一个 Agent 由 5 个组件组成：
 
-```
-┌──────────────────── Agent ────────────────────┐
-│                                               │
-│  ┌─────────────┐    ┌──────────────────────┐  │
-│  │   Persona   │    │      Loop Driver     │  │
-│  │ (system     │    │  while not done:     │  │
-│  │  prompt)    │    │    msg = llm(state)  │  │
-│  └─────────────┘    │    if msg.tool_call: │  │
-│                     │      run_tool()      │  │
-│  ┌─────────────┐    │      append_result() │  │
-│  │   Tools     │    │    else: break       │  │
-│  │ (schema +   │    └──────────────────────┘  │
-│  │  impl)      │                              │
-│  └─────────────┘    ┌──────────────────────┐  │
-│                     │  State (messages,    │  │
-│  ┌─────────────┐    │  scratchpad, memory) │  │
-│  │   Model     │    └──────────────────────┘  │
-│  │ Provider    │                              │
-│  └─────────────┘    ┌──────────────────────┐  │
-│                     │   Eval / Monitoring  │  │
-│                     └──────────────────────┘  │
-└───────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Agent["🤖 <b>Agent</b>"]
+      direction TB
+
+      subgraph Brain["决策层"]
+        direction LR
+        P["📜 <b>Persona</b><br/><span style='font-size:11px;color:#94a3c4'>system prompt<br/>角色 + 工作流</span>"]
+        M["🧠 <b>Model Provider</b><br/><span style='font-size:11px;color:#94a3c4'>Ollama / OpenAI<br/>Anthropic …</span>"]
+      end
+
+      subgraph Hands["执行层"]
+        direction LR
+        T["🔧 <b>Tools</b><br/><span style='font-size:11px;color:#94a3c4'>schema + 实现<br/>bash / read / write</span>"]
+        L["🔁 <b>Loop Driver</b><br/><span style='font-size:11px;color:#94a3c4'>while not done:<br/>llm → tool → llm</span>"]
+      end
+
+      subgraph Memory["记忆层"]
+        direction LR
+        S["📥 <b>State</b><br/><span style='font-size:11px;color:#94a3c4'>messages<br/>scratchpad<br/>memory</span>"]
+        E["📊 <b>Eval / Monitor</b><br/><span style='font-size:11px;color:#94a3c4'>traces<br/>cost<br/>success rate</span>"]
+      end
+
+      Brain  --> Hands
+      Hands  --> Memory
+      Memory -.feedback.-> Brain
+    end
+
+    classDef brain fill:#1a2342,stroke:#00f0ff,stroke-width:2px,color:#e8edf7
+    classDef hand  fill:#2a1f4d,stroke:#b84dff,stroke-width:2px,color:#e8edf7
+    classDef mem   fill:#1c3a2a,stroke:#4dffaa,stroke-width:2px,color:#e8edf7
+    class P,M brain
+    class T,L hand
+    class S,E mem
 ```
 
 每一块都能单独优化。
@@ -186,14 +198,16 @@ GPT-4 / Claude Opus 级别的模型可以"见招拆招"。
 
 ### 4.1 三种 State
 
-```
-┌────────── State ──────────┐
-│                           │
-│  1. Messages (对话历史)   │
-│  2. Scratchpad (笔记)     │
-│  3. Memory (跨会话记忆)   │
-│                           │
-└───────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph SS["🗂️ <b>State</b>"]
+      direction TB
+      MSG["💬 <b>Messages</b><br/><span style='font-size:11px;color:#94a3c4'>对话历史<br/>system + user + assistant + tool</span>"]
+      PAD["📒 <b>Scratchpad</b><br/><span style='font-size:11px;color:#94a3c4'>本次任务的临时笔记<br/>退出循环就丢</span>"]
+      MEM["🧬 <b>Memory</b><br/><span style='font-size:11px;color:#94a3c4'>跨会话长期记忆<br/>vector DB / KV / file</span>"]
+    end
+    classDef st fill:#131a2c,stroke:#00f0ff,stroke-width:2px,color:#e8edf7
+    class MSG,PAD,MEM st
 ```
 
 #### Messages

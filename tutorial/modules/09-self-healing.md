@@ -52,50 +52,52 @@ for i in range(5):
 
 我们的 PM 有一个专门的 "FIX MODE" workflow，由用户点击 dashboard 上的 **FIX** 按钮触发。
 
-```
-[Boss 点 FIX 按钮]
-        │
-        ▼
-[Dashboard POST /api/projects/<slug>/fix]
-        │
-        ▼
-[Spawn PM Agent with [FIX] prompt]
-        │
-        ▼
-┌─────────── PM FIX MODE ───────────┐
-│                                   │
-│  Step 1: 让 DevOps 跑诊断 smoke-test │
-│         (不改任何文件)              │
-│                                   │
-│  Step 2: 读 EVIDENCE                │
-│         若 PASS → "其实是好的" 报老板 │
-│                                   │
-│  Step 3 (FAIL): 根据失败模式定位     │
-│         - TemplateNotFound → eng-fe │
-│         - ImportError → eng-be      │
-│         - HTTP 404 → eng-be 路由 bug │
-│         - HTML 缺失 → eng-fe        │
-│         - 进程崩溃 → 看 log → eng-be │
-│                                   │
-│  Step 4: 派单（含 EVIDENCE 全文）   │
-│                                   │
-│  Step 5: trust-but-verify 修改     │
-│                                   │
-│  Step 6: 重跑 DevOps gate           │
-│         FAIL → loop step 4         │
-│         （最多 3 轮）              │
-│                                   │
-│  Step 7: 重写 STATUS.json           │
-│                                   │
-│  Step 8: 报告老板                   │
-│                                   │
-└───────────────────────────────────┘
-        │
-        ▼
-[Watchdog 兜底 STATUS.json]
-        │
-        ▼
-[Dashboard 弹完成横幅 / 失败横幅]
+```mermaid
+flowchart TD
+    Boss(["👤 Boss 点 FIX 按钮"])
+    POST["📡 Dashboard<br/>POST /api/projects/&lt;slug&gt;/fix"]
+    Spawn["🚀 Spawn PM Agent<br/>with [FIX] prompt"]
+
+    S1["<b>Step 1</b><br/>🩺 让 DevOps 跑 smoke-test<br/><i>(不改任何文件)</i>"]
+    S2{"<b>Step 2</b><br/>读 EVIDENCE<br/>PASS?"}
+    Already["✨ '其实是好的'<br/>报老板"]
+
+    S3{"<b>Step 3</b><br/>失败模式 → owner"}
+    M1["TemplateNotFound<br/>→ <b>eng-fe</b>"]
+    M2["ImportError<br/>→ <b>eng-be</b>"]
+    M3["HTTP 404<br/>→ <b>eng-be</b> 路由"]
+    M4["HTML 缺失<br/>→ <b>eng-fe</b>"]
+    M5["进程崩溃<br/>→ <b>eng-be</b>"]
+
+    S4["<b>Step 4</b><br/>📨 派单<br/>(附 EVIDENCE 全文)"]
+    S5["<b>Step 5</b><br/>🔍 trust-but-verify"]
+    S6{"<b>Step 6</b><br/>重跑 DevOps gate<br/>PASS?"}
+    Loop["♻️ 回 Step 4<br/>(max 3 轮)"]
+
+    S7["<b>Step 7</b><br/>📝 写 STATUS.json"]
+    S8["<b>Step 8</b><br/>📣 报告老板"]
+    WD["🐕 Watchdog 兜底<br/>STATUS.json"]
+    Banner(["🎉 Dashboard 弹横幅"])
+
+    Boss --> POST --> Spawn --> S1 --> S2
+    S2 -->|PASS| Already --> S7
+    S2 -->|FAIL| S3
+    S3 --> M1 & M2 & M3 & M4 & M5
+    M1 & M2 & M3 & M4 & M5 --> S4 --> S5 --> S6
+    S6 -->|FAIL| Loop --> S4
+    S6 -->|PASS| S7 --> S8 --> WD --> Banner
+
+    classDef boss fill:#3d2155,stroke:#ff4dca,stroke-width:3px,color:#fff
+    classDef sys fill:#2a1f4d,stroke:#b84dff,stroke-width:2px,color:#fff
+    classDef step fill:#1a2342,stroke:#00f0ff,stroke-width:2px,color:#e8edf7
+    classDef good fill:#1c3a2a,stroke:#4dffaa,stroke-width:3px,color:#fff
+    classDef map fill:#1e2944,stroke:#94a3c4,stroke-width:1px,color:#e8edf7
+
+    class Boss,Banner boss
+    class POST,Spawn,WD sys
+    class S1,S2,S3,S4,S5,S6,S7,S8,Loop step
+    class Already good
+    class M1,M2,M3,M4,M5 map
 ```
 
 ---

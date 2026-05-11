@@ -36,37 +36,44 @@
 
 ### 架构
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  GitHub Webhook → API Gateway → Queue (Kafka)            │
-└─────────────────────────────────────────────────────────┘
-                                   │
-                                   ▼
-                       ┌──── Router Agent ──────┐
-                       │  判断 PR 类型 / 优先级   │
-                       └──┬──────────────┬───────┘
-                          ▼              ▼
-                  ┌─Fast Lane──┐  ┌─Batch Lane─┐
-                  │ GPT-4o      │  │ Llama-3 70B│
-                  │ <5min SLA   │  │ <1h SLA    │
-                  └──┬──────────┘  └──┬─────────┘
-                     ▼                ▼
-              ┌── Specialist Agents ──┐
-              │  - Style Reviewer      │
-              │  - Security Reviewer   │
-              │  - Test Coverage       │
-              │  - Architecture        │
-              └──────┬─────────────────┘
-                     ▼
-            ┌── Aggregator Agent ──┐
-            │ 合并所有 reviewer 意见  │
-            │ 决定 approve / changes │
-            └──┬───────────────────┘
-                ▼
-            ┌── GitHub API ──┐
-            │ post comments   │
-            │ post review     │
-            └─────────────────┘
+```mermaid
+flowchart TB
+    GH(["🐙 GitHub Webhook"])
+    GW["🚪 API Gateway"]
+    KQ[("📬 Kafka<br/>Queue")]
+    Router{"🚦 <b>Router Agent</b><br/>判断 PR 类型 + 优先级"}
+
+    subgraph Lanes["双车道"]
+      direction LR
+      Fast["⚡ <b>Fast Lane</b><br/>GPT-4o<br/><i>SLA &lt; 5min</i>"]
+      Batch["🐢 <b>Batch Lane</b><br/>Llama-3 70B (本地)<br/><i>SLA &lt; 1h</i>"]
+    end
+
+    subgraph Specs["🧑‍💻 Specialist Agents (并行)"]
+      direction LR
+      S1["💄 Style"]
+      S2["🛡️ Security"]
+      S3["🧪 Test Coverage"]
+      S4["🏗️ Architecture"]
+    end
+
+    Agg{"🧮 <b>Aggregator</b><br/>合并意见<br/>approve / changes"}
+    Out(["📝 GitHub API<br/>post review + comments"])
+
+    GH --> GW --> KQ --> Router
+    Router --> Fast & Batch
+    Fast --> Specs
+    Batch --> Specs
+    Specs --> Agg --> Out
+
+    classDef ext fill:#3d2155,stroke:#ff4dca,stroke-width:2px,color:#fff
+    classDef sys fill:#2a1f4d,stroke:#b84dff,stroke-width:2px,color:#fff
+    classDef hub fill:#1a2342,stroke:#00f0ff,stroke-width:2px,color:#e8edf7
+    classDef good fill:#1c3a2a,stroke:#4dffaa,stroke-width:2px,color:#fff
+    class GH,Out ext
+    class GW,KQ sys
+    class Router,Fast,Batch,Agg hub
+    class S1,S2,S3,S4 good
 ```
 
 ### 关键设计决策
@@ -161,37 +168,49 @@ PR diff 可能很长（10K+ 行）。策略：
 
 ### 架构
 
-```
-                    ┌─ Web Chat ─┐
-                    └─ Email ────┴── Gateway (HTTP/WS)
-                                          │
-                                          ▼
-                              ┌── Router Agent ──┐
-                              │  分类用户意图      │
-                              │  + 紧急度评估      │
-                              └─┬──────┬──────┬───┘
-                                ▼      ▼      ▼
-                        Account  Tech   Sales (Agent pool)
-                        Agent   Support  Agent
-                                          │
-                          (per-conv loop) │
-                                          ▼
-                              ┌── Reasoning ──┐
-                              │ + Knowledge    │
-                              │   Retrieval    │
-                              │ (RAG vector DB)│
-                              └─┬──────────────┘
-                                ▼
-                          Agent reply / Tool call
-                                │
-                                ▼
-                        ┌── Escalation Detector ──┐
-                        │ confidence < 0.6 → human│
-                        │ user explicitly asks for│
-                        │ topic in danger list    │
-                        └──┬──────────────────────┘
-                           ▼
-                  Continue Agent | Hand off to human
+```mermaid
+flowchart TB
+    Web(["💬 Web Chat"])
+    Email(["📧 Email"])
+    GW["🚪 Gateway<br/>HTTP / WebSocket"]
+    Router{"🚦 <b>Router Agent</b><br/>意图分类<br/>+ 紧急度评估<br/><i>(轻量 classifier)</i>"}
+
+    subgraph Pool["🤖 Agent Pool (按角色)"]
+      direction LR
+      Acc["💳 Account"]
+      Tech["🔧 Tech Support"]
+      Sales["💰 Sales"]
+    end
+
+    Reason["🧠 Reasoning + Tool Call"]
+    RAG[("📚 <b>RAG</b><br/>vector DB<br/>docs / FAQ / tickets")]
+    Reply(["💭 Agent reply"])
+
+    Esc{"🚨 <b>Escalation Detector</b><br/>confidence &lt; 0.6 ?<br/>用户要求人工 ?<br/>topic in danger list ?"}
+    Cont(["✅ 继续 Agent"])
+    Human(["🙋 转人工"])
+
+    Web --> GW
+    Email --> GW
+    GW --> Router
+    Router --> Acc & Tech & Sales
+    Acc & Tech & Sales --> Reason
+    Reason <-.检索.-> RAG
+    Reason --> Reply --> Esc
+    Esc -->|否| Cont
+    Esc -->|是| Human
+
+    classDef in fill:#3d2155,stroke:#ff4dca,stroke-width:2px,color:#fff
+    classDef sys fill:#2a1f4d,stroke:#b84dff,stroke-width:2px,color:#fff
+    classDef agt fill:#1a2342,stroke:#00f0ff,stroke-width:2px,color:#e8edf7
+    classDef store fill:#1c3a2a,stroke:#4dffaa,stroke-width:2px,color:#fff
+    classDef out fill:#3a1a1a,stroke:#ff4757,stroke-width:2px,color:#fff
+    class Web,Email in
+    class GW,Router,Esc sys
+    class Acc,Tech,Sales,Reason,Reply agt
+    class RAG store
+    class Human out
+    class Cont store
 ```
 
 ### 关键设计决策
@@ -280,39 +299,47 @@ LLM(user_msg + retrieved_docs) → answer
 
 ### 架构
 
-```
-┌──────── VSCode Extension (TypeScript) ────────┐
-│  - User input UI                               │
-│  - File operation tools (read/write/grep)      │
-│  - Diff viewer / Apply UI                      │
-└──────────────┬─────────────────────────────────┘
-               ▼
-┌──────── Backend Agent Process ─────────────────┐
-│                                                 │
-│  ┌── Planner Agent ──┐                          │
-│  │  分析任务，列出需要│                          │
-│  │  改的 file + 步骤  │                          │
-│  └────────┬──────────┘                          │
-│           ▼                                     │
-│  ┌── Coder Agent ─────┐  (单线程或多线程)         │
-│  │ 一次改一个 file     │                          │
-│  └────────┬──────────┘                          │
-│           ▼                                     │
-│  ┌── Verifier Agent ──┐                          │
-│  │ 跑测试 + lint      │                          │
-│  │ 发现问题 → Coder   │                          │
-│  └────────┬──────────┘                          │
-│           ▼                                     │
-│  ┌── Reviewer (Self) ──┐                         │
-│  │ 整体看 diff，问用户 │                         │
-│  │ approve 不？        │                         │
-│  └────────┬───────────┘                          │
-└───────────┼──────────────────────────────────────┘
-            ▼
-       User confirms
-            │
-            ▼
-       Apply changes / Open PR
+```mermaid
+flowchart TB
+    User(["👤 User<br/>'@ 加 email 字段'"])
+
+    subgraph Ext["💻 <b>VSCode Extension</b> (TypeScript)"]
+      direction LR
+      UI["🖱️ Input UI"]
+      Tools["🔧 file ops<br/>read / write / grep"]
+      Diff["👀 Diff Viewer<br/>+ Apply UI"]
+    end
+
+    subgraph Backend["🖥️ <b>Backend Agent Process</b>"]
+      direction TB
+      P["🗺️ <b>Planner Agent</b><br/>(Claude Opus / GPT-4o)<br/>列出 file + 顺序"]
+      C["⌨️ <b>Coder Agent</b><br/>(Sonnet / Llama 70B)<br/>一次改一个 file"]
+      V{"🧪 <b>Verifier</b><br/>tsc / pyright / tests<br/>pass?"}
+      R["👀 <b>Reviewer (Self)</b><br/>整体看 diff"]
+      P --> C --> V
+      V -->|fail x &lt;3| C
+      V -->|pass| R
+    end
+
+    Confirm{"🙋 User<br/>approve?"}
+    Apply(["✅ Apply changes<br/>/ Open PR"])
+    Cancel(["❌ Cancel"])
+
+    User --> Ext --> Backend
+    R --> Confirm
+    Confirm -->|yes| Apply
+    Confirm -->|no| Cancel
+
+    classDef u fill:#3d2155,stroke:#ff4dca,stroke-width:2px,color:#fff
+    classDef ide fill:#1a2342,stroke:#00f0ff,stroke-width:2px,color:#e8edf7
+    classDef agt fill:#2a1f4d,stroke:#b84dff,stroke-width:2px,color:#fff
+    classDef good fill:#1c3a2a,stroke:#4dffaa,stroke-width:2px,color:#fff
+    classDef bad fill:#3a1a1a,stroke:#ff4757,stroke-width:2px,color:#fff
+    class User u
+    class UI,Tools,Diff ide
+    class P,C,V,R,Confirm agt
+    class Apply good
+    class Cancel bad
 ```
 
 ### 关键决策
@@ -400,36 +427,51 @@ VSCode 插件需要支持：
 
 ### 架构
 
-```
-┌──── Data Layer ──────────────────────────────┐
-│  Market data, News API, SEC filings, Social  │
-└──────────────┬───────────────────────────────┘
-               ▼
-┌──── Specialist Analyst Agents ───────────────┐
-│  ┌──────────┐  ┌─────────────┐  ┌──────────┐│
-│  │Fundamental│  │ Technical   │  │ Sentiment││
-│  │ Analyst   │  │ Analyst     │  │ Analyst  ││
-│  └──┬────────┘  └──┬──────────┘  └──┬───────┘│
-│     ▼              ▼                ▼        │
-│  reports + reasoning + data citations         │
-└──────────────┬───────────────────────────────┘
-               ▼
-┌──── Debate Layer ────────────────────────────┐
-│  Bull Agent ←──→ Bear Agent                  │
-│  (each tries to make case for/against)       │
-└──────────────┬───────────────────────────────┘
-               ▼
-┌──── Risk Manager Agent ──────────────────────┐
-│  Position sizing, exposure check, VaR        │
-└──────────────┬───────────────────────────────┘
-               ▼
-┌──── Decision Agent (PM) ─────────────────────┐
-│  Aggregates everything, proposes trade       │
-└──────────────┬───────────────────────────────┘
-               ▼
-┌──── Human Trader ────────────────────────────┐
-│  Final approval + execute                     │
-└──────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph DL["📊 <b>Data Layer</b>"]
+      direction LR
+      MD["📈 Market data"]
+      News["📰 News API"]
+      SEC["📋 SEC filings"]
+      Social["💬 Social"]
+    end
+
+    subgraph SA["🧪 <b>Specialist Analyst Agents</b> (并行)"]
+      direction LR
+      FA["📑 <b>Fundamental</b><br/>财报 + 估值"]
+      TA["📐 <b>Technical</b><br/>K线 + 指标"]
+      SE["🌡️ <b>Sentiment</b><br/>新闻 + 社媒"]
+    end
+
+    subgraph DEB["⚔️ <b>Debate Layer</b> (multi-agent debate)"]
+      direction LR
+      Bull["🐂 <b>Bull Agent</b><br/>论证买入"]
+      Bear["🐻 <b>Bear Agent</b><br/>论证卖出"]
+      Bull <-.挑刺.-> Bear
+    end
+
+    Risk{"🛡️ <b>Risk Manager</b><br/>(HARD GATE)<br/>VaR / Exposure / Blacklist"}
+    Dec["🎯 <b>Decision Agent (PM)</b><br/>聚合 + 提案 trade"]
+    Human(["🙋‍♂️ <b>Human Trader</b><br/>final approval + execute"])
+
+    DL --> SA
+    SA -->|reports + citations| DEB
+    DEB --> Risk
+    Risk -->|APPROVE| Dec
+    Risk -->|REJECT| Block(["❌ Block"])
+    Dec --> Human
+
+    classDef data fill:#1c3a2a,stroke:#4dffaa,stroke-width:2px,color:#fff
+    classDef agt fill:#1a2342,stroke:#00f0ff,stroke-width:2px,color:#e8edf7
+    classDef debate fill:#2a1f4d,stroke:#b84dff,stroke-width:2px,color:#fff
+    classDef gate fill:#3a1a1a,stroke:#ff4757,stroke-width:3px,color:#fff
+    classDef human fill:#3d2155,stroke:#ff4dca,stroke-width:3px,color:#fff
+    class MD,News,SEC,Social data
+    class FA,TA,SE,Dec agt
+    class Bull,Bear debate
+    class Risk,Block gate
+    class Human human
 ```
 
 ### 关键决策
@@ -508,35 +550,16 @@ Agent 提"建议"，trader 看 reasoning，决定执行 / 不执行 / 修改。
 
 不管什么 Agent 系统设计题，按这 5 步：
 
-```
-1. 澄清需求 (5 min)
-   - 输入输出
-   - 规模（QPS / 数据量）
-   - 延迟 SLA
-   - 数据敏感性
-   - 集成对象
-
-2. 容量估算 (5 min)
-   - QPS / Tokens/day
-   - 成本估算
-   - 决定 cloud vs local
-
-3. 架构图 (15 min)
-   - Agent 拆分（按 role）
-   - 通信模式（hub / pipeline / blackboard）
-   - 数据 store
-   - 外部接口
-
-4. 关键决策 (15 min)
-   - 防 hallucination 怎么做
-   - State 怎么管理
-   - Failure mode 怎么处理
-   - Observability 怎么搞
-
-5. Trade-offs + 演进 (10 min)
-   - 列每个决策的优劣
-   - 给出 v0 → v1 → v2 路径
-   - 哪些是"将来再说"
+```mermaid
+flowchart LR
+    S1["<b>① 澄清需求</b><br/><span style='font-size:10px'>5 min</span><br/><br/>📥 输入输出<br/>📊 规模 / QPS<br/>⏱️ 延迟 SLA<br/>🔒 数据敏感<br/>🔗 集成对象"]
+    S2["<b>② 容量估算</b><br/><span style='font-size:10px'>5 min</span><br/><br/>📈 QPS / tokens<br/>💰 成本<br/>☁️ vs 🏠 cloud/local"]
+    S3["<b>③ 架构图</b><br/><span style='font-size:10px'>15 min</span><br/><br/>🤖 Agent 拆分<br/>📡 通信模式<br/>📦 数据 store<br/>🌐 外部接口"]
+    S4["<b>④ 关键决策</b><br/><span style='font-size:10px'>15 min</span><br/><br/>🛡️ 防 hallucination<br/>🧠 State 管理<br/>💥 Failure mode<br/>📊 Observability"]
+    S5["<b>⑤ Trade-off + 演进</b><br/><span style='font-size:10px'>10 min</span><br/><br/>⚖️ 优劣对比<br/>🚀 v0 → v1 → v2<br/>📅 '将来再说'"]
+    S1 --> S2 --> S3 --> S4 --> S5
+    classDef step fill:#1a2342,stroke:#00f0ff,stroke-width:2px,color:#e8edf7
+    class S1,S2,S3,S4,S5 step
 ```
 
 **练习方法**：在白板上花 1 小时画一道题，对照文中思路看自己漏了哪些。漏的就是面试时会被问到的。

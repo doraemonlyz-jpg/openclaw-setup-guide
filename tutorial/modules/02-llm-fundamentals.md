@@ -173,14 +173,29 @@ OpenAI 提供 `seed` 参数可以一定程度复现，但不保证。**要做 ev
 
 ### 选型决策树
 
-```
-任务对单次质量要求很高？（金融、医疗、法律）
-├── 是 → 云端，别犹豫
-└── 否 → 数据敏感？
-         ├── 是 → 本地（Ollama）
-         └── 否 → 量大？
-                  ├── 大（>100k 请求/天） → 本地（成本碾压）
-                  └── 小 → 云端（快、稳）
+```mermaid
+flowchart TD
+    Q1{"📌 任务对单次质量要求很高?<br/>(金融/医疗/法律)"}
+    Q2{"🔒 数据敏感?"}
+    Q3{"📈 量大?<br/>(&gt; 100k 请求/天)"}
+    Cloud(["☁️ <b>云端</b><br/>GPT-4o / Claude<br/><i>别犹豫</i>"])
+    Local(["🏠 <b>本地</b><br/>Ollama"])
+    LocalCheap(["🏠 <b>本地</b><br/>(成本碾压)"])
+    CloudFast(["☁️ <b>云端</b><br/>(快 + 稳)"])
+
+    Q1 -->|是| Cloud
+    Q1 -->|否| Q2
+    Q2 -->|是| Local
+    Q2 -->|否| Q3
+    Q3 -->|是| LocalCheap
+    Q3 -->|否| CloudFast
+
+    classDef q fill:#2a1f4d,stroke:#b84dff,stroke-width:2px,color:#fff
+    classDef cloud fill:#1a2342,stroke:#00f0ff,stroke-width:2px,color:#fff
+    classDef local fill:#1c3a2a,stroke:#4dffaa,stroke-width:2px,color:#fff
+    class Q1,Q2,Q3 q
+    class Cloud,CloudFast cloud
+    class Local,LocalCheap local
 ```
 
 **面试金句**：

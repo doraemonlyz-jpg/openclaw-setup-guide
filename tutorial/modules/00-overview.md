@@ -8,28 +8,28 @@
 
 ## 心智地图
 
-```
-    LLM (聊天)
-     │
-     │ + Tool Calling 协议 + Loop
-     ▼
-   Single Agent (能干活的 LLM)
-     │
-     │ + Persona + 状态 + 重试机制
-     ▼
-   Reliable Single Agent (能稳定干活)
-     │
-     │ + 多个角色 + 通信协议 + 编排
-     ▼
-   Multi-Agent System (一个团队)
-     │
-     │ + 验证 + 边界 + 沙箱 + 自愈
-     ▼
-   Production Multi-Agent System (一家小公司)
-     │
-     │ + 可观测性 + 通知 + UI
-     ▼
-   Boss-friendly Multi-Agent Platform (OpenClaw 公司就在这里)
+```mermaid
+flowchart TD
+    L["💬 <b>LLM</b><br/><span style='font-size:11px;color:#94a3c4'>只能聊天</span>"]
+    SA["⚙️ <b>Single Agent</b><br/><span style='font-size:11px;color:#94a3c4'>能干活的 LLM</span>"]
+    RSA["🛡️ <b>Reliable Agent</b><br/><span style='font-size:11px;color:#94a3c4'>能稳定干活</span>"]
+    MAS["👥 <b>Multi-Agent System</b><br/><span style='font-size:11px;color:#94a3c4'>一个团队</span>"]
+    PMAS["🏭 <b>Production Multi-Agent</b><br/><span style='font-size:11px;color:#94a3c4'>一家小公司</span>"]
+    BPM["🎯 <b>Boss-friendly Platform</b><br/><span style='font-size:11px;color:#b84dff'>OpenClaw 在这里</span>"]
+
+    L  -->|"+ Tool Calling 协议<br/>+ Loop"| SA
+    SA -->|"+ Persona<br/>+ 状态 + 重试"| RSA
+    RSA -->|"+ 多角色<br/>+ 通信 + 编排"| MAS
+    MAS -->|"+ 验证 + 边界<br/>+ 沙箱 + 自愈"| PMAS
+    PMAS -->|"+ 可观测<br/>+ 通知 + UI"| BPM
+
+    classDef lvl1 fill:#1a2342,stroke:#00f0ff,stroke-width:2px,color:#e8edf7
+    classDef lvl2 fill:#2a1f4d,stroke:#b84dff,stroke-width:2px,color:#e8edf7
+    classDef goal fill:#3d2155,stroke:#ff4dca,stroke-width:3px,color:#fff
+
+    class L,SA,RSA lvl1
+    class MAS,PMAS lvl2
+    class BPM goal
 ```
 
 每个箭头都对应教程的一个模块。请把这张图记住——面试的时候，对方问你任何一个细节问题，你都能定位到这张图的哪一层。
