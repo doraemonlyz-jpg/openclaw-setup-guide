@@ -115,11 +115,23 @@ All projects land at `~/.openclaw/company/projects/<slug>/`. Every agent reads f
 4. PM asks  ─sessions_send─►  Designer writes DESIGN.md (if UI)
 5. PM asks  ─sessions_send─►  eng-be writes BE files (loop per task)
    PM asks  ─sessions_send─►  eng-fe writes FE files (loop per task)
-6. PM asks  ─sessions_send─►  QA writes TEST_PLAN.md + TEST_REPORT.md
-7. PM asks  ─sessions_send─►  DevOps starts service + smoke test
+6. PM asks  ─sessions_send─►  QA writes TEST_PLAN.md + TEST_REPORT.md  ←─┐
+                                ❘ requires "## Summary\nPASS: X/Y" X==Y │ retry
+7. PM asks  ─sessions_send─►  DevOps starts + smoke tests              │ up to
+                                ❘ requires <RESULT>PASS</RESULT> tag    │ 2-3
+                                ❘ on the LAST line of the reply        ─┘ rounds
 8. PM asks  ─sessions_send─►  Writer creates README.md
-9. PM reports back to boss (1 paragraph)
+9. PM writes  ─────────►  STATUS.json (phase: complete | failed)
+                            ↳ dashboard fires desktop notification + chime
+10. PM reports back to boss (1 paragraph, honest)
 ```
+
+**Two structural gates, not honor-system rules:**
+
+- **QA evidence gate** — every scenario in `TEST_REPORT.md` must include `Exit code: <N>` captured via `; echo "<EXIT=$?>"`. Verdict comes from the exit code, not opinion. Reports without exit codes are rejected by PM.
+- **DevOps result gate** — the last line of DevOps's reply must be `<RESULT>PASS</RESULT>` or `<RESULT>FAIL</RESULT>`. PM greps for the tag. PASS requires `<HTTP=2xx>` actually appearing in DevOps's EVIDENCE block. No tag = retry; FAIL = send back to engineer to fix.
+
+If either gate fails after retries, PM stamps `STATUS.json` with `phase: failed` plus a `reason` field. The dashboard fires a red "BUILD FAILED" banner + descending failure tone (different from the success chime), so you know without looking which one happened.
 
 After every worker reply, PM is required to verify the claimed file exists with `read` (the **trust-but-verify** rule, see Caveats).
 
@@ -143,7 +155,11 @@ On a 36 GB Mac, Ollama can keep 1-2 medium models hot. With 6 agents on `qwen3:8
 
 ### 4. Failure cascades
 
-Tech Lead writes a sloppy `TASKS.md` → eng-be picks the wrong dependencies → QA can't run the tests → DevOps can't start the service → README is wrong. Each step amplifies upstream errors. For now this means: **don't expect the company to ship anything you'd put in production**. Use it for personal scripts, weekend toys, and exploring orchestration patterns.
+Tech Lead writes a sloppy `TASKS.md` → eng-be picks the wrong dependencies → QA can't run the tests → DevOps can't start the service → README is wrong. Each step amplifies upstream errors.
+
+The QA + DevOps gates (see §4 of "Two structural gates" above) catch the most common cascade — workers claiming success when nothing actually runs. With gates active, a project that doesn't really start ships as `phase: failed` with a useful `reason`, instead of as `phase: complete` with broken code. **You'll still see failures, but you'll know about them.**
+
+For now: **don't expect the company to ship anything you'd put in production**. Use it for personal scripts, weekend toys, and exploring orchestration patterns.
 
 ### 5. No sandbox by default
 

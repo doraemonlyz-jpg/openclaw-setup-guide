@@ -1298,10 +1298,51 @@ a { color: var(--neon-cyan); text-decoration: none; }
   border: 1px solid currentColor;
   border-radius: 1px;
 }
-.proj-phase.phase-running { color: var(--neon-yellow); animation: cb-blink 1s infinite; }
+.proj-phase.phase-running  { color: var(--neon-yellow); animation: cb-blink 1s infinite; }
 .proj-phase.phase-complete { color: var(--neon-green); }
-.proj-phase.phase-stalled { color: var(--neon-orange); }
-.proj-phase.phase-empty { color: var(--text-muted); }
+.proj-phase.phase-failed   { color: var(--neon-red); animation: cb-blink 0.7s infinite; }
+.proj-phase.phase-stalled  { color: var(--neon-orange); }
+.proj-phase.phase-empty    { color: var(--text-muted); }
+
+/* ─── Banner failure variant (red theme override) ─── */
+.completion-banner.failed {
+  border-color: var(--neon-red);
+  background:
+    linear-gradient(135deg,
+      rgba(255, 51, 102, 0.20),
+      rgba(255, 42, 133, 0.12) 60%,
+      rgba(255, 136, 0, 0.16));
+  box-shadow:
+    0 0 30px rgba(255, 51, 102, 0.55),
+    0 0 70px rgba(255, 42, 133, 0.30),
+    inset 0 0 24px rgba(255, 51, 102, 0.18);
+  animation: cb-pulse-red 2.4s ease-in-out infinite;
+}
+.completion-banner.failed .cb-glitch { color: var(--neon-red); text-shadow: 0 0 6px rgba(255, 51, 102, 0.6); }
+.completion-banner.failed .cb-icon {
+  color: var(--neon-red);
+  border-color: var(--neon-red);
+  background: rgba(255, 51, 102, 0.08);
+  text-shadow: 0 0 12px rgba(255, 51, 102, 0.9);
+}
+.completion-banner.failed .cb-title {
+  color: var(--neon-red);
+  text-shadow: 0 0 6px rgba(255, 51, 102, 0.6);
+}
+@keyframes cb-pulse-red {
+  0%, 100% {
+    box-shadow:
+      0 0 30px rgba(255, 51, 102, 0.55),
+      0 0 70px rgba(255, 42, 133, 0.30),
+      inset 0 0 24px rgba(255, 51, 102, 0.18);
+  }
+  50% {
+    box-shadow:
+      0 0 50px rgba(255, 51, 102, 0.85),
+      0 0 110px rgba(255, 42, 133, 0.45),
+      inset 0 0 36px rgba(255, 51, 102, 0.30);
+  }
+}
 @keyframes cb-blink {
   0%, 100% { opacity: 1; }
   50%      { opacity: .3; }

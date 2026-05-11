@@ -416,6 +416,32 @@ function playCompletionChime() {
   } catch {}
 }
 
+// Failure tone: descending minor 3rd + dissonant low buzz. Different enough
+// from the chime that you know without looking which fired.
+function playFailureTone() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+  const t0 = ctx.currentTime;
+  const drops = [
+    { f: 440, d: 0.22, t: 0.00 },  // A4
+    { f: 311, d: 0.28, t: 0.18 },  // Eb4 (tritone)
+    { f: 220, d: 0.40, t: 0.40 },  // A3
+  ];
+  for (const n of drops) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(n.f, t0 + n.t);
+    gain.gain.setValueAtTime(0, t0 + n.t);
+    gain.gain.linearRampToValueAtTime(0.14, t0 + n.t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0005, t0 + n.t + n.d);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t0 + n.t);
+    osc.stop(t0 + n.t + n.d + 0.05);
+  }
+}
+
 function fmtDuration(seconds) {
   if (!seconds || seconds < 0) return "—";
   if (seconds < 60) return seconds + "s";
@@ -425,22 +451,39 @@ function fmtDuration(seconds) {
   return `${Math.floor(m/60)}h ${m%60}m`;
 }
 
-function showCompletionBanner(proj) {
+function showCompletionBanner(proj, kind = "complete") {
   const banner = $("#completion-banner");
-  $("#cb-title").textContent = `${proj.slug.toUpperCase()} · DELIVERED`;
+  banner.classList.toggle("failed", kind === "failed");
+  const glitch = banner.querySelector(".cb-glitch");
+  const icon = $(".cb-icon");
+  if (kind === "failed") {
+    glitch.textContent = "◤ BUILD FAILED ◢";
+    glitch.setAttribute("data-text", "◤ BUILD FAILED ◢");
+    icon.textContent = "✕";
+    $("#cb-title").textContent = `${proj.slug.toUpperCase()} · BUILD FAILED`;
+  } else {
+    glitch.textContent = "◤ DELIVERED ◢";
+    glitch.setAttribute("data-text", "◤ DELIVERED ◢");
+    icon.textContent = "✓";
+    $("#cb-title").textContent = `${proj.slug.toUpperCase()} · DELIVERED`;
+  }
+
   const filesNum = `<span class="num">${proj.file_count}</span>`;
   const durNum = `<span class="num">${fmtDuration(proj.duration_sec)}</span>`;
-  const summary = (proj.explicit && proj.explicit.summary) || "ready to run";
+  const ex = proj.explicit || {};
+  const summary = ex.summary || (kind === "failed" ? "see STATUS.json for reason" : "ready to run");
+  let extra = "";
+  if (kind === "failed" && ex.reason) extra = ` · <span class="num">reason:</span> ${escapeHtml(ex.reason)}`;
+  if (kind === "complete" && ex.qa_pass_ratio) extra = ` · qa <span class="num">${escapeHtml(ex.qa_pass_ratio)}</span>`;
+  if (kind === "complete" && ex.smoke_http_code) extra += ` · http <span class="num">${ex.smoke_http_code}</span>`;
   $("#cb-meta").innerHTML =
-    `${filesNum} files · built in ${durNum} · ${escapeHtml(summary)}`;
+    `${filesNum} files · ${kind === "failed" ? "ran for" : "built in"} ${durNum} · ${escapeHtml(summary)}${extra}`;
 
   banner.classList.remove("hidden");
-  // tick to allow the slide-in transition
   requestAnimationFrame(() => banner.classList.add("visible"));
 
   $("#cb-open").onclick = () => {
     dismissBanner();
-    // Try to open the project in the projects column
     const list = $("#projects-list");
     const item = list.querySelector(`[data-slug="${CSS.escape(proj.slug)}"]`);
     if (item) item.click();
@@ -453,28 +496,37 @@ function dismissBanner() {
 }
 $("#cb-dismiss").addEventListener("click", dismissBanner);
 
-function fireDesktopNotification(proj) {
+function fireDesktopNotification(proj, kind = "complete") {
   if (!("Notification" in window)) return;
   if (Notification.permission !== "granted") return;
+  const ex = proj.explicit || {};
   try {
-    const n = new Notification("✅ AI Studio — Project Delivered", {
-      body: `${proj.slug} · ${proj.file_count} files · built in ${fmtDuration(proj.duration_sec)}\nClick to open dashboard.`,
-      tag: `delivery-${proj.slug}`,
-      requireInteraction: false,
+    const isFail = kind === "failed";
+    const title = isFail ? "✕ AI Studio — Build Failed" : "✅ AI Studio — Project Delivered";
+    let body = `${proj.slug} · ${proj.file_count} files · ${fmtDuration(proj.duration_sec)}`;
+    if (isFail && ex.reason) body += `\nReason: ${ex.reason}`;
+    if (!isFail && ex.qa_pass_ratio) body += `\nQA ${ex.qa_pass_ratio} · HTTP ${ex.smoke_http_code || "—"}`;
+    body += "\nClick to open dashboard.";
+    const n = new Notification(title, {
+      body,
+      tag: `${kind}-${proj.slug}`,
+      requireInteraction: isFail,  // failures stick around until dismissed
       silent: false,
     });
     n.onclick = () => { window.focus(); n.close(); };
   } catch (e) { console.warn("notification failed:", e); }
 }
 
-function celebrateCompletion(proj) {
-  if (firedCompletions.has(proj.slug)) return;
-  firedCompletions.add(proj.slug);
-  showCompletionBanner(proj);
-  playCompletionChime();
-  fireDesktopNotification(proj);
-  // Also drop a subtle title-bar marker so a backgrounded tab gets noticed
-  document.title = `✅ ${proj.slug} done · BOSS_CONSOLE`;
+function celebrateCompletion(proj, kind = "complete") {
+  const dedupKey = `${kind}:${proj.slug}`;
+  if (firedCompletions.has(dedupKey)) return;
+  firedCompletions.add(dedupKey);
+  showCompletionBanner(proj, kind);
+  if (kind === "failed") playFailureTone(); else playCompletionChime();
+  fireDesktopNotification(proj, kind);
+  const icon = kind === "failed" ? "✕" : "✅";
+  const word = kind === "failed" ? "FAILED" : "done";
+  document.title = `${icon} ${proj.slug} ${word} · BOSS_CONSOLE`;
   setTimeout(() => { document.title = "// BOSS_CONSOLE :: AI_STUDIO //"; }, 30000);
 }
 
@@ -488,24 +540,29 @@ async function refreshRunStatus() {
       const prev = lastRunStatus[proj.slug];
       lastRunStatus[proj.slug] = proj;
 
-      // Don't celebrate stuff we discover already-complete on first load
-      // unless it finished in the last 5 minutes (likely we just missed it
-      // because the page was loading).
+      // Two terminal phases worth notifying on: complete and failed.
+      const terminalPhases = new Set(["complete", "failed"]);
       const finishedRecently = (now - proj.last_file_mtime) < 300;
 
-      let isCompletionEvent = false;
-      if (firstStatusRender) {
-        if (proj.phase === "complete" && finishedRecently && !firedCompletions.has(proj.slug)) {
-          isCompletionEvent = true;
-        } else if (proj.phase === "complete") {
-          // already-done long ago — mark as "seen" so we don't fire later
-          firedCompletions.add(proj.slug);
-        }
-      } else if (prev && prev.phase !== "complete" && proj.phase === "complete") {
-        isCompletionEvent = true;
-      }
+      for (const term of terminalPhases) {
+        const dedupKey = `${term}:${proj.slug}`;
+        let isEvent = false;
 
-      if (isCompletionEvent) celebrateCompletion(proj);
+        if (firstStatusRender) {
+          // On initial page load, only celebrate things that finished within
+          // the last 5 minutes — assume older terminal states already saw
+          // their notification (or the user wasn't here).
+          if (proj.phase === term && finishedRecently && !firedCompletions.has(dedupKey)) {
+            isEvent = true;
+          } else if (proj.phase === term) {
+            firedCompletions.add(dedupKey);  // mark as seen so we don't fire later
+          }
+        } else if (prev && prev.phase !== term && proj.phase === term) {
+          isEvent = true;
+        }
+
+        if (isEvent) celebrateCompletion(proj, term);
+      }
     }
     firstStatusRender = false;
   } catch (e) {
