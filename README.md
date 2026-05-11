@@ -97,19 +97,22 @@ See the **[full tutorial site](https://doraemonlyz-jpg.github.io/openclaw-setup-
 
 ## 🏢 Build a multi-agent AI software studio (advanced)
 
-Once OpenClaw is installed, you can layer an **8-agent local-only software studio** on top: PM, Tech Lead, two Engineers, QA, DevOps, Designer, Tech Writer. You give the boss request in plain English, the company tries to build it.
+Once OpenClaw is installed, you can layer an **8-agent local-only software studio** on top: PM, Tech Lead, two Engineers, QA, DevOps, Designer, Tech Writer. You give the boss request in plain English, the company tries to build it. Default models: **`gpt-oss:20b`** for the 6 orchestration roles (best local tool-use), **`qwen2.5-coder:7b`** for the engineers.
 
 ```bash
 # After running quickstart.sh
 curl -fsSL https://raw.githubusercontent.com/doraemonlyz-jpg/openclaw-setup-guide/main/setup-company.sh | bash
 
-# Then talk to your PM
+# Optional: launch the Boss Dashboard (live view of the studio at http://127.0.0.1:5050)
+curl -fsSL https://raw.githubusercontent.com/doraemonlyz-jpg/openclaw-setup-guide/main/setup-dashboard.sh | bash
+
+# Then talk to your PM (CLI or dashboard footer)
 openclaw agent --agent pm --message "Build me a tiny pomodoro CLI in Python. Path: ~/.openclaw/company/projects/pomodoro/"
 ```
 
-Read the design + caveats: [**docs/company.md**](docs/company.md). Local 8B-14B models are **not** drop-in replacements for Claude/GPT-5 at orchestration — read the caveats first.
+Read the design + caveats: [**docs/company.md**](docs/company.md). Local 20 B / 7 B models are **not** drop-in replacements for Claude / GPT-5 at orchestration — read the caveats first.
 
-中文：用同样的方式，OpenClaw 自带的多 agent 能力可以搭一个"本地小公司"——PM + 技术负责人 + 两个工程师 + QA + DevOps + 设计 + 文档作者 8 个角色。详见 [docs/company.md](docs/company.md) 的"诚实预期"章节再决定上不上。
+中文：用同样的方式，OpenClaw 自带的多 agent 能力可以搭一个"本地小公司"——PM + 技术负责人 + 两个工程师 + QA + DevOps + 设计 + 文档作者 8 个角色。再加一个老板专用 web 仪表盘 (`setup-dashboard.sh`)。详见 [docs/company.md](docs/company.md)。
 
 ## 🤝 Contributing
 

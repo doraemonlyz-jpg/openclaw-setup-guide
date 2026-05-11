@@ -18,12 +18,14 @@ COMPANY_DIR="${COMPANY_DIR:-$HOME/.openclaw/company}"
 WORKSPACES="$COMPANY_DIR/agents-workspaces"
 PROJECTS="$COMPANY_DIR/projects"
 
-GENERAL_MODEL="${GENERAL_MODEL:-qwen3:8b}"          # ~5 GB — used for PM, techlead, QA, devops, designer, writer
-CODER_MODEL="${CODER_MODEL:-qwen2.5-coder:7b}"      # ~5 GB — used for engineers
-# Note: deepseek-r1:14b sounds tempting for techlead but R1 is reasoning-focused and weak at TOOL CALLING.
-# We default techlead to qwen3:8b which has much better tool use. You can override:
-#   THINKING_MODEL=deepseek-r1:14b USE_THINKING_FOR_TECHLEAD=1 bash setup-company.sh
-THINKING_MODEL="${THINKING_MODEL:-deepseek-r1:14b}" # ~9 GB — installed but only used if USE_THINKING_FOR_TECHLEAD=1
+# Defaults are tuned for "best local tool-calling, fits on 36 GB Mac."
+# - gpt-oss:20b is OpenAI's open model purpose-built for agentic tool-use (~13 GB)
+#   We use it for the 6 orchestration roles so they share one loaded model in RAM.
+# - qwen2.5-coder:7b is a code-focused model (~5 GB) for the two engineers.
+# Set FAST=1 to fall back to qwen3:8b (~5 GB) for orchestration if you're tight on RAM.
+ORCH_MODEL="${ORCH_MODEL:-${FAST:+qwen3:8b}}"
+ORCH_MODEL="${ORCH_MODEL:-gpt-oss:20b}"
+CODER_MODEL="${CODER_MODEL:-qwen2.5-coder:7b}"
 
 bold() { printf '\033[1m%s\033[0m\n' "$1"; }
 ok()   { printf '\033[32m✓\033[0m %s\n' "$1"; }
@@ -39,7 +41,7 @@ ok "openclaw + ollama ready"
 
 # ───────── pull models ─────────
 bold "Pulling models (skip if already present)"
-for m in "$GENERAL_MODEL" "$CODER_MODEL" "$THINKING_MODEL"; do
+for m in "$ORCH_MODEL" "$CODER_MODEL"; do
   if ollama list 2>/dev/null | awk 'NR>1 {print $1}' | grep -qx "$m"; then
     ok "$m already pulled"
   else
@@ -464,17 +466,15 @@ ok "8 personas written to $WORKSPACES/*/AGENTS.md"
 
 # ───────── create agents in OpenClaw ─────────
 bold "Registering 8 agents with OpenClaw"
-TECHLEAD_MODEL="${USE_THINKING_FOR_TECHLEAD:+$THINKING_MODEL}"
-TECHLEAD_MODEL="${TECHLEAD_MODEL:-$GENERAL_MODEL}"
 declare -a AGENTS=(
-  "pm        ollama/$GENERAL_MODEL    pm"
-  "techlead  ollama/$TECHLEAD_MODEL   techlead"
-  "eng-be    ollama/$CODER_MODEL      eng-be"
-  "eng-fe    ollama/$CODER_MODEL      eng-fe"
-  "qa        ollama/$GENERAL_MODEL    qa"
-  "devops    ollama/$GENERAL_MODEL    devops"
-  "designer  ollama/$GENERAL_MODEL    designer"
-  "writer    ollama/$GENERAL_MODEL    writer"
+  "pm        ollama/$ORCH_MODEL    pm"
+  "techlead  ollama/$ORCH_MODEL    techlead"
+  "eng-be    ollama/$CODER_MODEL   eng-be"
+  "eng-fe    ollama/$CODER_MODEL   eng-fe"
+  "qa        ollama/$ORCH_MODEL    qa"
+  "devops    ollama/$ORCH_MODEL    devops"
+  "designer  ollama/$ORCH_MODEL    designer"
+  "writer    ollama/$ORCH_MODEL    writer"
 )
 
 for tuple in "${AGENTS[@]}"; do

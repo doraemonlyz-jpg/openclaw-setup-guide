@@ -51,16 +51,18 @@ openclaw agent --agent pm --message "Build me a tiny pomodoro CLI in Python. Pat
 
 | Agent       | Default model        | Job in one line                                  |
 |-------------|----------------------|--------------------------------------------------|
-| `pm`        | `qwen3:8b`           | Boss's only contact; orchestrates everyone else  |
-| `techlead`  | `qwen3:8b`           | Picks stack, breaks SPEC into 3-8 tasks          |
-| `designer`  | `qwen3:8b`           | UX flow + page layout + copy                     |
+| `pm`        | `gpt-oss:20b`        | Boss's only contact; orchestrates everyone else  |
+| `techlead`  | `gpt-oss:20b`        | Picks stack, breaks SPEC into 3-8 tasks          |
+| `designer`  | `gpt-oss:20b`        | UX flow + page layout + copy                     |
 | `eng-be`    | `qwen2.5-coder:7b`   | Backend implementation                           |
 | `eng-fe`    | `qwen2.5-coder:7b`   | Frontend implementation                          |
-| `qa`        | `qwen3:8b`           | Test plan + actual smoke tests                   |
-| `devops`    | `qwen3:8b`           | Starts the project, curls it, reports HTTP code  |
-| `writer`    | `qwen3:8b`           | Writes the README                                |
+| `qa`        | `gpt-oss:20b`        | Test plan + actual smoke tests                   |
+| `devops`    | `gpt-oss:20b`        | Starts the project, curls it, reports HTTP code  |
+| `writer`    | `gpt-oss:20b`        | Writes the README                                |
 
-Total disk: **~14 GB** of model files (`qwen3:8b` ≈ 5 GB, `qwen2.5-coder:7b` ≈ 5 GB, `deepseek-r1:14b` ≈ 9 GB shipped but unused by default).
+Total disk: **~18 GB** of model files (`gpt-oss:20b` ≈ 13 GB, `qwen2.5-coder:7b` ≈ 5 GB).
+
+**Why `gpt-oss:20b` for orchestration?** It is OpenAI's open-weights model trained for agentic tool use. In our smoke tests it reliably calls `sessions_send` and `write` on the first try, while smaller models (or reasoning-first models like DeepSeek-R1) often *describe* the call instead of making it. All 6 orchestration agents share one loaded copy in RAM, so no model swap penalty between them. If you're tight on RAM, `FAST=1 bash setup-company.sh` falls back to `qwen3:8b` for orchestration (~9 GB total).
 
 ---
 
@@ -179,9 +181,28 @@ openclaw daemon restart
 
 ---
 
+## Watch it work — the Boss Dashboard
+
+A tiny Flask app gives you a live, three-column view: agents, projects, message stream — plus a footer to send the boss's next instruction. One command:
+
+```bash
+bash setup-dashboard.sh   # → http://127.0.0.1:5050
+```
+
+What you see:
+
+- **Left** — 8 agent cards with model + activity timestamps; the active agent's card glows in lobster orange.
+- **Middle** — every project under `~/.openclaw/company/projects/`; click a project to inspect SPEC.md / TASKS.md / DESIGN.md / source files / TEST_REPORT.md / README.md in tabs.
+- **Right** — combined timeline of all messages across all agents. Inter-session (agent→agent) messages are highlighted; tool calls are visible inline.
+- **Bottom** — type the next request, hit `Send` (or `Cmd/Ctrl+Enter`); it spawns `openclaw agent --agent pm --message "..."` and tails the log.
+
+Files: [`boss-dashboard/`](../boss-dashboard/) — `app.py` (Flask, ~250 lines), `index.html`, `styles.css`, `app.js`. No build step.
+
+> Don't expose port 5050 publicly — the boss endpoint has full execution authority over your PM agent.
+
 ## Try it
 
-Three example boss prompts (paste into PM):
+Three example boss prompts (paste into PM, or into the dashboard footer):
 
 **Stock viewer (web app)**
 ```
