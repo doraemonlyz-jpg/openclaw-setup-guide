@@ -157,6 +157,8 @@ $("#pd-close").addEventListener("click", () => {
 // or did the user scroll up to read history (don't yank them around)?
 let stickToBottom = true;
 let lastRenderedKey = "";
+let knownMessageIds = new Set();   // for "new flash" detection
+let firstActivityRender = true;     // suppress flash on initial load
 
 const stream = $("#activity-stream");
 stream.addEventListener("scroll", () => {
@@ -210,33 +212,86 @@ function renderActivityCard(m) {
   return card;
 }
 
+function msgKey(m) { return `${m.agent}:${m.id || m.ts || ""}`; }
+
 async function refreshActivity() {
   try {
     const r = await fetch("/api/activity?limit=30");
     const d = await r.json();
-    // Stable key for change detection — avoid re-rendering when nothing's new
-    const key = d.items.map((m) => `${m.agent}:${m.id || m.ts}`).join("|");
+    const key = d.items.map(msgKey).join("|");
     if (key === lastRenderedKey) {
       $("#activity-count").textContent = d.items.length;
       return;
     }
     lastRenderedKey = key;
 
-    // Items come oldest → newest. Render in order, newest at the bottom (terminal style).
+    // Detect which messages are brand new (not in our last seen set)
+    const newIds = new Set();
+    if (!firstActivityRender) {
+      for (const m of d.items) {
+        const k = msgKey(m);
+        if (!knownMessageIds.has(k)) newIds.add(k);
+      }
+    }
+    knownMessageIds = new Set(d.items.map(msgKey));
+
     stream.innerHTML = "";
     for (const m of d.items) {
-      stream.appendChild(renderActivityCard(m));
+      const card = renderActivityCard(m);
+      if (newIds.has(msgKey(m))) card.classList.add("new-flash");
+      stream.appendChild(card);
     }
     $("#activity-count").textContent = d.items.length;
 
-    // Auto-scroll to bottom only if user was already there
     if (stickToBottom) {
-      // double rAF to ensure layout has settled before scrolling
       requestAnimationFrame(() => requestAnimationFrame(scrollActivityToBottom));
     }
+    firstActivityRender = false;
   } catch (e) {
     console.warn("activity refresh failed:", e);
   }
+}
+
+// ──────── HUD telemetry (mostly cosmetic, plus real-ish latency) ────────
+const bootTime = Date.now();
+let lastHudLatency = null;
+
+function fmtUptime() {
+  const s = Math.floor((Date.now() - bootTime) / 1000);
+  const h = String(Math.floor(s / 3600)).padStart(2, "0");
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+  const sec = String(s % 60).padStart(2, "0");
+  return `${h}:${m}:${sec}`;
+}
+
+async function refreshHud() {
+  // measure round-trip latency on the lightest endpoint
+  const t0 = performance.now();
+  let ok = true;
+  try {
+    await fetch("/api/agents", { method: "HEAD" }).catch(() => fetch("/api/agents"));
+  } catch { ok = false; }
+  const lat = Math.round(performance.now() - t0);
+  lastHudLatency = lat;
+
+  $("#hud-conn").textContent = ok ? "OK" : "DOWN";
+  $("#hud-conn").parentElement.classList.toggle("crit", !ok);
+
+  $("#hud-lat").textContent = lat + "ms";
+  const latCell = $("#hud-lat").parentElement;
+  latCell.classList.toggle("warn", lat > 200 && lat <= 500);
+  latCell.classList.toggle("crit", lat > 500);
+
+  // GPU + MEM are simulated — they pulse around plausible values for vibe
+  const gpu = 30 + Math.floor(Math.sin(Date.now() / 4000) * 25 + Math.random() * 30);
+  $("#hud-gpu").textContent = gpu + "%";
+  $("#hud-gpu").parentElement.classList.toggle("warn", gpu > 70 && gpu <= 90);
+  $("#hud-gpu").parentElement.classList.toggle("crit", gpu > 90);
+
+  const memUsed = (16 + Math.sin(Date.now() / 6000) * 4 + Math.random() * 2).toFixed(1);
+  $("#hud-mem").textContent = `${memUsed}/36G`;
+
+  $("#hud-up").textContent = fmtUptime();
 }
 
 // ──────── boss send ────────
@@ -296,3 +351,7 @@ refreshAgents();    setInterval(refreshAgents, POLL_AGENTS_MS);
 refreshProjects();  setInterval(refreshProjects, POLL_PROJECTS_MS);
 refreshActivity();  setInterval(refreshActivity, POLL_ACTIVITY_MS);
 refreshBossLog();   setInterval(refreshBossLog, POLL_BOSS_LOG_MS);
+refreshHud();       setInterval(refreshHud, 1000);
+
+// uptime ticks once a second on its own (cheaper than full HUD refresh)
+setInterval(() => { $("#hud-up").textContent = fmtUptime(); }, 1000);

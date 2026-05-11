@@ -7,17 +7,28 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- CRT scanlines overlay -->
+  <!-- background layers -->
+  <canvas id="matrix-canvas" aria-hidden="true"></canvas>
   <div class="scanlines" aria-hidden="true"></div>
+  <div class="glitch-overlay" aria-hidden="true"></div>
 
   <header class="topbar">
     <div class="brand">
       <span class="brand-mark">⌬</span>
       <div>
-        <h1>BOSS CONSOLE<span class="sub">// SECTOR_8 · LIVE</span></h1>
+        <h1 data-text="BOSS CONSOLE" class="decode">BOSS CONSOLE<span class="sub">// SECTOR_8 · LIVE</span></h1>
         <p class="tagline">8-AGENT NEURAL STUDIO · SELF-HOSTED · NO TELEMETRY</p>
       </div>
     </div>
+
+    <div class="hud" id="hud">
+      <span class="hud-cell"><span class="label">CONN</span><span class="val" id="hud-conn">OK</span></span>
+      <span class="hud-cell"><span class="label">LAT</span><span class="val" id="hud-lat">—</span></span>
+      <span class="hud-cell"><span class="label">GPU</span><span class="val" id="hud-gpu">—</span></span>
+      <span class="hud-cell"><span class="label">MEM</span><span class="val" id="hud-mem">—</span></span>
+      <span class="hud-cell"><span class="label">UP</span><span class="val" id="hud-up">00:00:00</span></span>
+    </div>
+
     <div class="status">
       <span class="dot dot-on"></span>
       <span id="status-text">UPLINK_ACTIVE</span>
@@ -77,6 +88,7 @@
     <div id="boss-log" class="boss-log hidden"></div>
   </footer>
 
+  <script src="matrix-rain.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
