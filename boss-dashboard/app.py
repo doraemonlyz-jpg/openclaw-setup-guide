@@ -16,6 +16,7 @@ import shutil
 import signal
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -384,6 +385,13 @@ def api_boss_send():
     log_dir = Path("/tmp")
     ts = int(time.time())
     log_path = log_dir / f"boss-msg-{ts}.log"
+
+    # Snapshot existing projects so the watchdog can detect which new project
+    # PM creates (or which existing project PM touches most).
+    pre_existing = set()
+    if PROJECTS.exists():
+        pre_existing = {p.name for p in PROJECTS.iterdir() if p.is_dir()}
+
     try:
         proc = subprocess.Popen(
             ["openclaw", "agent", "--agent", "pm",
@@ -392,11 +400,13 @@ def api_boss_send():
             stdin=subprocess.DEVNULL,
             start_new_session=True,
         )
+        watchdog = _spawn_boss_watchdog(proc.pid, ts, pre_existing)
         return jsonify({
             "ok": True,
             "pid": proc.pid,
             "log": str(log_path),
             "started_at": ts,
+            "watchdog_pid": watchdog.pid if watchdog else None,
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -712,6 +722,313 @@ def api_project_run_tail(slug: str):
     })
 
 
+# ────────── Smoke-test endpoint — DevOps's eyes outside the gateway ──────────
+
+@app.route("/api/projects/<slug>/smoke-test", methods=["POST", "GET"])
+def api_project_smoke_test(slug: str):
+    """Run the project, hit / and a default API path, return EVIDENCE.
+
+    The dashboard runs OUTSIDE OpenClaw's gateway sandbox, so it can
+    actually pip-install and start servers. Worker agents (DevOps) are
+    sandboxed and CANNOT do this — they should curl this endpoint
+    instead. The response is a single text/plain block formatted as
+    the EVIDENCE template DevOps's persona requires, so the agent can
+    paste it verbatim.
+
+    Optional query/body params:
+      ?path=/some/route   extra URL path to GET after /
+      ?keep_running=1     don't auto-stop after the test
+    """
+    import urllib.request, urllib.error
+    project = _project_path(slug)
+    if not project:
+        return ("EVIDENCE\n\nproject not found: " + slug + "\n\n<RESULT>FAIL</RESULT>\n",
+                404, {"Content-Type": "text/plain"})
+
+    extra_path = request.args.get("path", "")
+    keep_running = request.args.get("keep_running") == "1" or \
+        (request.get_json(silent=True) or {}).get("keep_running")
+
+    state = _load_running()
+    started_fresh = False
+    info = state.get(slug)
+
+    # Start it if not running
+    if not (info and _pid_alive(info.get("pid", 0))):
+        ok, info = _start_process(slug, project)
+        if not ok:
+            ev = (
+                "## EVIDENCE\n\n"
+                f"Entry point detection / boot FAILED for `{slug}`.\n"
+                f"error: {info.get('error')}\n"
+                f"detail: {info.get('detail','')}\n\n"
+                f"Log tail:\n```\n{info.get('log_tail','(no log)')}\n```\n\n"
+                "## VERDICT\n"
+                f"Project failed to boot: {info.get('error')}\n\n"
+                "<RESULT>FAIL</RESULT>\n"
+            )
+            return (ev, 200, {"Content-Type": "text/plain"})
+        state[slug] = info
+        _save_running(state)
+        started_fresh = True
+        time.sleep(1)  # extra warm-up
+
+    pid = info["pid"]; port = info["port"]
+    base = f"http://127.0.0.1:{port}"
+
+    def fetch(path: str) -> tuple[int, str]:
+        url = base + path
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=15) as r:
+                body = r.read()[:1500].decode("utf-8", errors="replace")
+                return (r.status, body)
+        except urllib.error.HTTPError as e:
+            try: body = e.read()[:1500].decode("utf-8", errors="replace")
+            except Exception: body = ""
+            return (e.code, body)
+        except Exception as e:
+            return (0, f"(connection error: {e})")
+
+    alive_marker = "0" if _pid_alive(pid) else "1"
+
+    code_root, body_root = fetch("/")
+    code_extra, body_extra = (None, None)
+    if extra_path:
+        code_extra, body_extra = fetch(extra_path)
+
+    log_path = info.get("log") or str(RUN_LOG_DIR / f"{slug}.log")
+    log_tail = ""
+    try:
+        log_tail = "\n".join(Path(log_path).read_text(errors="replace").splitlines()[-10:])
+    except Exception:
+        pass
+
+    # Heuristic: PASS only if /, returned 2xx AND body looks like real markup
+    body_root_short = body_root.strip()
+    looks_html = "<html" in body_root_short.lower() or "<!doctype" in body_root_short.lower()
+    is_pass = (200 <= code_root < 300) and looks_html
+    if extra_path and code_extra is not None and not (200 <= code_extra < 400):
+        is_pass = False
+
+    verdict_text = (
+        "Project boots and serves real HTML."
+        if is_pass else
+        "Project responds but returns broken/non-HTML content."
+        if (code_root and 200 <= code_root < 300) else
+        f"Project does not serve a usable response on / (HTTP {code_root})."
+    )
+
+    ev_lines = [
+        "## EVIDENCE",
+        "",
+        f"Entry point: `{info['entry']}` on port {port}",
+        f"Process alive: <ALIVE={alive_marker}>",
+        "",
+        "GET /",
+        f"  <HTTP={code_root}>",
+        "  ```",
+        f"  {body_root[:400].replace(chr(10), chr(10)+'  ')}",
+        "  ```",
+    ]
+    if extra_path:
+        ev_lines += [
+            "",
+            f"GET {extra_path}",
+            f"  <HTTP={code_extra}>",
+            "  ```",
+            f"  {(body_extra or '')[:400].replace(chr(10), chr(10)+'  ')}",
+            "  ```",
+        ]
+    ev_lines += [
+        "",
+        "App log tail:",
+        "```",
+        log_tail or "(empty)",
+        "```",
+        "",
+        "## VERDICT",
+        verdict_text,
+        "",
+        f"<RESULT>{'PASS' if is_pass else 'FAIL'}</RESULT>",
+        "",
+    ]
+
+    if not keep_running:
+        _stop_process(slug, info)
+        state.pop(slug, None)
+        _save_running(state)
+
+    return ("\n".join(ev_lines), 200, {"Content-Type": "text/plain"})
+
+
+# ────────── Watchdog — guarantee a STATUS.json gets written ──────────
+
+def _spawn_status_watchdog(slug: str, pm_pid: int, dispatch_at: int,
+                           project_path: Path) -> subprocess.Popen | None:
+    """Spawn a tiny side-process that:
+      1. Waits up to 30 min for `pm_pid` to exit.
+      2. Re-checks STATUS.json: if PM stamped it after dispatch_at, do nothing.
+      3. Otherwise calls our own /smoke-test and writes STATUS.json with
+         `source: "watchdog"`, `reason: "pm_did_not_stamp"`.
+
+    The boss dashboard always gets ground truth, even if PM forgets its job.
+    """
+    script = (
+        "import os, sys, time, json, urllib.request, re\n"
+        "from pathlib import Path\n"
+        f"slug = {slug!r}\n"
+        f"pm_pid = {int(pm_pid)}\n"
+        f"dispatch_at = {int(dispatch_at)}\n"
+        f"project = Path({str(project_path)!r})\n"
+        "status_path = project / 'STATUS.json'\n"
+        "deadline = time.time() + 1800\n"
+        "while time.time() < deadline:\n"
+        "    try: os.kill(pm_pid, 0)\n"
+        "    except ProcessLookupError: break\n"
+        "    except PermissionError: break\n"
+        "    time.sleep(10)\n"
+        "else:\n"
+        "    print('[watchdog] timeout waiting for PM, leaving STATUS.json alone')\n"
+        "    sys.exit(0)\n"
+        "# Give PM a few seconds to flush the write\n"
+        "time.sleep(5)\n"
+        "if status_path.exists() and status_path.stat().st_mtime >= dispatch_at:\n"
+        "    print(f'[watchdog] PM stamped STATUS.json at mtime={status_path.stat().st_mtime}, dispatch={dispatch_at} — done')\n"
+        "    sys.exit(0)\n"
+        "print('[watchdog] PM exited without stamping STATUS.json — running fallback smoke-test')\n"
+        "evidence = ''\n"
+        "try:\n"
+        "    req = urllib.request.Request(\n"
+        "        f'http://127.0.0.1:5050/api/projects/{slug}/smoke-test',\n"
+        "        method='POST', data=b'')\n"
+        "    with urllib.request.urlopen(req, timeout=180) as r:\n"
+        "        evidence = r.read().decode('utf-8', errors='replace')\n"
+        "except Exception as e:\n"
+        "    evidence = f'watchdog smoke-test failed: {e}'\n"
+        "print('[watchdog] evidence:\\n' + evidence)\n"
+        "is_pass = '<RESULT>PASS</RESULT>' in evidence\n"
+        "m = re.search(r'<HTTP=(\\d+)>', evidence)\n"
+        "http_code = int(m.group(1)) if m else 0\n"
+        "files = sum(1 for p in project.rglob('*') if p.is_file()\n"
+        "            and not any(seg in {'.venv','venv','__pycache__','node_modules','.git'} for seg in p.parts))\n"
+        "status = {\n"
+        "    'phase': 'complete' if is_pass else 'failed',\n"
+        "    'summary': ('Auto-stamped by dashboard watchdog after PM exited '\n"
+        "                'without writing STATUS.json. ' +\n"
+        "                ('Smoke-test PASSED.' if is_pass else 'Smoke-test FAILED — see watchdog log.')),\n"
+        "    'ended_at': int(time.time()),\n"
+        "    'files': files,\n"
+        "    'test_status': 'pass' if is_pass else 'fail',\n"
+        "    'smoke_http_code': http_code,\n"
+        "    'source': 'watchdog',\n"
+        "    'reason': '' if is_pass else 'pm_did_not_stamp',\n"
+        "}\n"
+        "status_path.write_text(json.dumps(status, indent=2))\n"
+        "print(f'[watchdog] wrote STATUS.json phase={status[\"phase\"]}')\n"
+    )
+
+    log_path = Path("/tmp") / f"watchdog-{slug}-{int(time.time())}.log"
+    try:
+        return subprocess.Popen(
+            [sys.executable, "-c", script],
+            stdout=open(log_path, "w"), stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception as e:
+        print(f"[fix] watchdog spawn failed: {e}", file=sys.stderr)
+        return None
+
+
+def _spawn_boss_watchdog(pm_pid: int, dispatch_at: int,
+                         pre_existing: set[str]) -> subprocess.Popen | None:
+    """Watchdog for new builds (boss/send): when PM exits, figure out which
+    project was created/touched and ensure it has a fresh STATUS.json.
+    """
+    pre_list = sorted(pre_existing)
+    script = (
+        "import os, sys, time, json, urllib.request, re\n"
+        "from pathlib import Path\n"
+        f"pm_pid = {int(pm_pid)}\n"
+        f"dispatch_at = {int(dispatch_at)}\n"
+        f"projects_root = Path({str(PROJECTS)!r})\n"
+        f"pre_existing = set({pre_list!r})\n"
+        "deadline = time.time() + 1800\n"
+        "while time.time() < deadline:\n"
+        "    try: os.kill(pm_pid, 0)\n"
+        "    except ProcessLookupError: break\n"
+        "    except PermissionError: break\n"
+        "    time.sleep(10)\n"
+        "else:\n"
+        "    print('[boss-watchdog] timeout')\n"
+        "    sys.exit(0)\n"
+        "time.sleep(8)\n"
+        "if not projects_root.exists():\n"
+        "    print('[boss-watchdog] projects root missing')\n"
+        "    sys.exit(0)\n"
+        "candidates = [p for p in projects_root.iterdir() if p.is_dir()]\n"
+        "new_dirs = [p for p in candidates if p.name not in pre_existing]\n"
+        "target = None\n"
+        "if new_dirs:\n"
+        "    target = max(new_dirs, key=lambda p: p.stat().st_mtime)\n"
+        "else:\n"
+        "    touched = [p for p in candidates if p.stat().st_mtime >= dispatch_at]\n"
+        "    if touched:\n"
+        "        target = max(touched, key=lambda p: p.stat().st_mtime)\n"
+        "if target is None:\n"
+        "    print('[boss-watchdog] no project created/touched — nothing to stamp')\n"
+        "    sys.exit(0)\n"
+        "slug = target.name\n"
+        "status_path = target / 'STATUS.json'\n"
+        "if status_path.exists() and status_path.stat().st_mtime >= dispatch_at:\n"
+        "    print(f'[boss-watchdog] PM stamped {slug} — done')\n"
+        "    sys.exit(0)\n"
+        "print(f'[boss-watchdog] PM exited without stamping {slug} — running fallback smoke-test')\n"
+        "evidence = ''\n"
+        "try:\n"
+        "    req = urllib.request.Request(\n"
+        "        f'http://127.0.0.1:5050/api/projects/{slug}/smoke-test',\n"
+        "        method='POST', data=b'')\n"
+        "    with urllib.request.urlopen(req, timeout=180) as r:\n"
+        "        evidence = r.read().decode('utf-8', errors='replace')\n"
+        "except Exception as e:\n"
+        "    evidence = f'watchdog smoke-test failed: {e}'\n"
+        "print('[boss-watchdog] evidence:\\n' + evidence)\n"
+        "is_pass = '<RESULT>PASS</RESULT>' in evidence\n"
+        "m = re.search(r'<HTTP=(\\d+)>', evidence)\n"
+        "http_code = int(m.group(1)) if m else 0\n"
+        "files = sum(1 for p in target.rglob('*') if p.is_file()\n"
+        "            and not any(seg in {'.venv','venv','__pycache__','node_modules','.git'} for seg in p.parts))\n"
+        "status = {\n"
+        "    'phase': 'complete' if is_pass else 'failed',\n"
+        "    'summary': ('Auto-stamped by boss-watchdog after PM exited '\n"
+        "                'without writing STATUS.json. ' +\n"
+        "                ('Smoke-test PASSED.' if is_pass else 'Smoke-test FAILED — see watchdog log.')),\n"
+        "    'ended_at': int(time.time()),\n"
+        "    'files': files,\n"
+        "    'test_status': 'pass' if is_pass else 'fail',\n"
+        "    'smoke_http_code': http_code,\n"
+        "    'source': 'watchdog',\n"
+        "    'reason': '' if is_pass else 'pm_did_not_stamp',\n"
+        "}\n"
+        "status_path.write_text(json.dumps(status, indent=2))\n"
+        "print(f'[boss-watchdog] wrote STATUS.json for {slug} phase={status[\"phase\"]}')\n"
+    )
+
+    log_path = Path("/tmp") / f"boss-watchdog-{int(time.time())}.log"
+    try:
+        return subprocess.Popen(
+            [sys.executable, "-c", script],
+            stdout=open(log_path, "w"), stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception as e:
+        print(f"[boss] watchdog spawn failed: {e}", file=sys.stderr)
+        return None
+
+
 # ────────── Fix endpoint — ask PM to diagnose + repair ──────────
 
 @app.route("/api/projects/<slug>/fix", methods=["POST"])
@@ -749,6 +1066,7 @@ def api_project_fix(slug: str):
     msg = "\n".join(parts)
 
     log_path = Path("/tmp") / f"fix-{slug}-{int(time.time())}.log"
+    dispatch_at = int(time.time())
     try:
         proc = subprocess.Popen(
             ["openclaw", "agent", "--agent", "pm",
@@ -760,14 +1078,19 @@ def api_project_fix(slug: str):
     except Exception as e:
         return jsonify({"error": "spawn failed", "detail": str(e)}), 500
 
+    # Spawn the STATUS.json watchdog so the boss always gets ground truth,
+    # even if PM forgets to stamp.
+    watchdog = _spawn_status_watchdog(slug, proc.pid, dispatch_at, project)
+
     return jsonify({
         "ok": True,
         "pid": proc.pid,
         "log": str(log_path),
-        "started_at": int(time.time()),
+        "started_at": dispatch_at,
         "slug": slug,
         "description": description,
         "message_preview": msg.split("\n")[0],
+        "watchdog_pid": watchdog.pid if watchdog else None,
     })
 
 

@@ -173,6 +173,23 @@ Boss messages like "fix stock-price-app", "<slug> doesn't work", or any message 
 - Re-engage the writer (README is fine if it was fine)
 - Run the full new-project pipeline (phases 2-9) — that wastes 30+ minutes
 
+## ⚠️ NON-NEGOTIABLE FINAL STEP — write STATUS.json before any reply to boss
+
+**This rule is the single hardest constraint in your job.**
+
+Before you reply to the boss, no matter what (success or failure, build or fix, even a "I checked, it was already working" answer), you MUST call the `write` tool to create `<project>/STATUS.json`. This is the ONLY signal the Boss Dashboard has to fire the desktop notification, render the right phase pill (complete vs failed), and tell the boss what happened without forcing them to read raw logs.
+
+Always perform these in this exact order:
+1. **First**: call `write` to create STATUS.json with at minimum `{ "phase": "complete"|"failed", "summary": "...", "ended_at": <unix sec>, "files": <count>, "test_status": "pass"|"fail"|"partial" }`
+2. **Then** (and only then): reply to the boss
+
+**Consequences of skipping STATUS.json:**
+- A Boss Dashboard watchdog will detect the omission within ~60 seconds after your process exits.
+- It will run its own dashboard smoke-test on the project and stamp a STATUS.json with `"source": "watchdog"`, `"reason": "pm_did_not_stamp"`, plus the watchdog's measured HTTP code.
+- This is permanently visible to the boss as evidence that you skipped the step. **Don't make the dashboard do your job.**
+
+NEVER reply first then plan to stamp. NEVER assume the heuristic will figure it out. Always: `write STATUS.json` → `reply to boss`.
+
 ## ⚠️ Trust-but-verify rule
 
 After EVERY teammate reply that claims to have written or modified a file, you MUST verify it actually exists with the `read` tool. Local small models sometimes claim "TASKS.md written" without actually calling the write tool, leaving disk empty.
@@ -414,84 +431,39 @@ You make the project actually start, do a smoke run, **prove it with raw HTTP ev
 
 ## ⚠️ CRITICAL — READ FIRST
 
-You MUST USE the `bash` TOOL to actually start the project and curl it.
-Saying "I would run X" or "the service started successfully" without showing the literal HTTP status code captured by curl is a fireable offense.
+You are sandboxed by OpenClaw's allowlist — `pip install`, `python <script>`, and most arbitrary commands are blocked. **You CANNOT run servers yourself.** Instead, the Boss Dashboard exposes a smoke-test endpoint that runs OUTSIDE the sandbox. Use it.
+
 Your reply MUST end with the machine-readable tag `<RESULT>PASS</RESULT>` or `<RESULT>FAIL</RESULT>` — PM greps for it before stamping the project complete.
 
 ## Your STRICT workflow
 
-1. `cd ~/.openclaw/company/projects/<slug>/`.
-2. Find entry point: `app.py`, `main.py`, `server.py`, `index.html`, etc.
-3. Install missing deps **in a venv** to avoid PEP 668 errors:
+For ANY request to smoke-test a project (slug = `<slug>`):
+
+1. **Call the dashboard's smoke-test endpoint** with `bash` + `curl`:
    ```bash
-   python3 -m venv .venv
-   .venv/bin/pip install -q -r requirements.txt 2>&1 | tail -5
+   curl -sS -X POST "http://127.0.0.1:5050/api/projects/<slug>/smoke-test"
    ```
-4. Start the entry point in background; pick a free port if 5000 is busy:
+   For an API project, also test a representative endpoint:
    ```bash
-   PORT=5099  # or whatever the app uses
-   .venv/bin/python app.py > /tmp/<slug>.log 2>&1 &
-   APP_PID=$!
-   sleep 4
+   curl -sS -X POST "http://127.0.0.1:5050/api/projects/<slug>/smoke-test?path=/price%3Fticker%3DAAPL"
    ```
-5. Verify the process is still alive:
+   The dashboard will: pip-install requirements in a venv, start the project on a free port, GET `/` and the optional extra path, kill the process, and return a fully-formatted EVIDENCE block as text/plain (already containing `<HTTP=...>`, `<ALIVE=...>`, response body, log tail, and `<RESULT>PASS|FAIL</RESULT>`).
+
+2. **Paste the dashboard's response verbatim** as your reply. Do NOT paraphrase, summarize, or reorder. The response IS the EVIDENCE block PM expects.
+
+3. If the dashboard returns 5xx or refuses (e.g. dashboard offline), THEN fall back to manual:
    ```bash
-   ps -p $APP_PID > /dev/null ; echo "<ALIVE=$?>"
+   ls ~/.openclaw/company/projects/<slug>/
+   cat ~/.openclaw/company/projects/<slug>/templates/*.html 2>/dev/null | head -20
    ```
-   If `<ALIVE=0>` is missing, the app crashed on boot → FAIL. Tail the log to find why.
-6. Send a real HTTP request and capture both code and body:
-   ```bash
-   curl -sS -o /tmp/<slug>-body.txt -w "<HTTP=%{http_code}>" http://127.0.0.1:$PORT/
-   head -c 500 /tmp/<slug>-body.txt
-   ```
-7. (If app has API endpoints) hit one with realistic input, e.g.:
-   ```bash
-   curl -sS -o /tmp/<slug>-api.txt -w "<HTTP=%{http_code}>" "http://127.0.0.1:$PORT/<endpoint>?<arg>"
-   head -c 500 /tmp/<slug>-api.txt
-   ```
-8. Tail last 10 lines of the app log: `tail -10 /tmp/<slug>.log`.
-9. **KILL the background process**: `kill $APP_PID 2>/dev/null; wait $APP_PID 2>/dev/null`.
-10. Compute verdict:
-    - `<HTTP=200>` (or any 2xx) on `/` AND any tested API → PASS
-    - 4xx/5xx, missing `<HTTP=...>`, or `<ALIVE=1>` → FAIL
-
-## REQUIRED reply template
-
-```
-## EVIDENCE
-
-Entry point: `<file>` on port <N>
-Process alive: <ALIVE=0|1>
-
-GET /
-  <HTTP=200>
-  ```
-  <first 500 chars of response body>
-  ```
-
-GET /<api endpoint>
-  <HTTP=200>
-  ```
-  <first 500 chars>
-  ```
-
-App log tail:
-```
-<last 10 lines verbatim>
-```
-
-## VERDICT
-<one sentence summary>
-
-<RESULT>PASS</RESULT>     ← or <RESULT>FAIL</RESULT> — exactly one of these, last line of reply
-```
+   and report what you can see (file list, sizes, snippets) with `<RESULT>FAIL</RESULT>` and a note "dashboard smoke-test endpoint unavailable".
 
 ## Hard rules
-- **Always cleanup.** If you started a process, you kill it before replying. Zombies = unhappy laptop.
-- **Don't bind to 0.0.0.0.** Always 127.0.0.1.
+- **Use the dashboard endpoint as your PRIMARY mechanism.** It's the only thing that can really start servers.
+- **NO `pip install`, NO `python app.py`** in your bash calls — they'll be blocked by the gateway. Use the dashboard.
+- **NO claiming PASS without the dashboard's response literally containing `<HTTP=2xx>` AND `<html` in the body.**
 - **NO destructive commands.** No `rm -rf`, no `sudo`, no writes outside the project dir.
-- **NO claiming PASS without `<HTTP=2xx>` literally appearing in evidence.**
-- **Static project (HTML only)**: serve via `python3 -m http.server` on a port you pick, curl it, kill it.
+- **NEVER fabricate `<HTTP=...>` numbers.** Always quote them from the dashboard's actual response.
 EOF
 }
 
