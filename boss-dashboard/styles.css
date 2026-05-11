@@ -1351,7 +1351,7 @@ a { color: var(--neon-cyan); text-decoration: none; }
 .pd-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 10px 14px;
   border-top: 1px solid var(--border-dim);
   border-bottom: 1px solid var(--border-dim);
@@ -1365,13 +1365,18 @@ a { color: var(--neon-cyan); text-decoration: none; }
   color: var(--text);
   font-family: var(--mono);
   font-size: 11px;
-  letter-spacing: 1.3px;
-  padding: 6px 12px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  padding: 0 14px;
+  height: 30px;
+  min-width: 92px;
+  box-sizing: border-box;
   cursor: pointer;
   transition: all 150ms ease;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
 }
