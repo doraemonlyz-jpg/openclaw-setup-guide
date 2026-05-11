@@ -267,6 +267,55 @@ $("#pd-delete").addEventListener("click", () => {
   confirmDelete(activeProject);
 });
 
+// ──────── FIX modal ────────
+$("#pd-fix").addEventListener("click", () => {
+  if (!activeProject) return;
+  $("#fix-slug").textContent = activeProject;
+  $("#fix-input").value = "";
+  $("#fix-modal").classList.remove("hidden");
+  setTimeout(() => $("#fix-input").focus(), 50);
+});
+$("#fix-cancel").addEventListener("click", () => {
+  $("#fix-modal").classList.add("hidden");
+});
+$("#fix-modal").addEventListener("click", (e) => {
+  if (e.target.id === "fix-modal") $("#fix-modal").classList.add("hidden");
+});
+$("#fix-submit").addEventListener("click", async () => {
+  if (!activeProject) return;
+  const slug = activeProject;
+  const description = $("#fix-input").value.trim();
+  $("#fix-modal").classList.add("hidden");
+  const fixBtn = $("#pd-fix");
+  const statusEl = $("#pd-status");
+  fixBtn.classList.add("dispatched");
+  statusEl.className = "pd-status starting";
+  statusEl.textContent = "DISPATCHING TO PM...";
+  try {
+    const r = await fetch(`/api/projects/${encodeURIComponent(slug)}/fix`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description }),
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      statusEl.className = "pd-status error";
+      statusEl.textContent = "✗ " + (d.error || "dispatch failed");
+      fixBtn.classList.remove("dispatched");
+      return;
+    }
+    statusEl.className = "pd-status starting";
+    statusEl.textContent = `🔧 PM dispatched (pid ${d.pid}) — watch Live Activity →`;
+    // Hold the dispatched-state visual for ~30s; refreshRunStatus will
+    // eventually overwrite it once the project's STATUS.json gets re-stamped.
+    setTimeout(() => fixBtn.classList.remove("dispatched"), 30000);
+  } catch (e) {
+    statusEl.className = "pd-status error";
+    statusEl.textContent = "✗ " + e.message;
+    fixBtn.classList.remove("dispatched");
+  }
+});
+
 async function refreshRunLog() {
   if (!activeProject) return;
   try {

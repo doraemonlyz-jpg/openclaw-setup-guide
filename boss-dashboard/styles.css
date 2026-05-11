@@ -1414,6 +1414,19 @@ a { color: var(--neon-cyan); text-decoration: none; }
   box-shadow: var(--glow-cyan-md);
 }
 
+.pd-fix {
+  color: var(--neon-purple);
+  text-shadow: 0 0 4px rgba(168, 85, 247, 0.5);
+}
+.pd-fix:hover {
+  background: rgba(168, 85, 247, 0.14);
+  box-shadow: 0 0 14px rgba(168, 85, 247, 0.55);
+}
+.pd-fix.dispatched {
+  color: var(--neon-yellow);
+  animation: cb-blink 0.8s infinite;
+}
+
 .pd-delete {
   color: var(--text-muted);
   border-color: var(--text-muted);
@@ -1424,6 +1437,50 @@ a { color: var(--neon-cyan); text-decoration: none; }
   border-color: var(--neon-red);
   background: rgba(255, 51, 102, 0.12);
   box-shadow: 0 0 14px rgba(255, 51, 102, 0.45);
+}
+
+/* ─── FIX modal — purple variant ─── */
+.fix-card {
+  border-color: var(--neon-purple) !important;
+  box-shadow:
+    0 0 30px rgba(168, 85, 247, 0.4),
+    inset 0 0 16px rgba(168, 85, 247, 0.1) !important;
+}
+.fix-title {
+  color: var(--neon-purple) !important;
+  text-shadow: 0 0 6px rgba(168, 85, 247, 0.6) !important;
+}
+.fix-label {
+  display: block;
+  margin: 12px 0 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+#fix-input {
+  width: 100%;
+  background: var(--code-bg);
+  color: var(--text);
+  border: 1px solid var(--border-mid);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 8px 10px;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+#fix-input:focus {
+  border-color: var(--neon-purple);
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
+}
+.fix-submit {
+  border-color: var(--neon-purple);
+  color: var(--neon-purple);
+  text-shadow: 0 0 4px rgba(168, 85, 247, 0.5);
+}
+.fix-submit:hover {
+  background: rgba(168, 85, 247, 0.18);
+  box-shadow: 0 0 14px rgba(168, 85, 247, 0.6);
 }
 
 .pd-status {

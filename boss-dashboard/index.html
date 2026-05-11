@@ -80,11 +80,12 @@
           <button id="pd-close" class="btn-icon" title="close">✕</button>
         </div>
 
-        <!-- Action bar: RUN / STOP / OPEN / DELETE -->
+        <!-- Action bar: RUN / STOP / OPEN / FIX / DELETE -->
         <div class="pd-actions" id="pd-actions">
           <button id="pd-run"    class="pd-btn pd-run"    title="Start the project locally">▶ RUN</button>
           <button id="pd-stop"   class="pd-btn pd-stop"   title="Stop running process" hidden>⏹ STOP</button>
           <a      id="pd-open"   class="pd-btn pd-open"   title="Open in new tab" target="_blank" hidden>🔗 OPEN</a>
+          <button id="pd-fix"    class="pd-btn pd-fix"    title="Ask the company to diagnose & fix this project">🔧 FIX</button>
           <span   id="pd-status" class="pd-status">—</span>
           <button id="pd-delete" class="pd-btn pd-delete" title="Delete this project (cannot undo)">🗑 DELETE</button>
         </div>
@@ -103,6 +104,24 @@
           <div class="confirm-actions">
             <button id="confirm-no"  class="cb-btn cb-btn-ghost">CANCEL</button>
             <button id="confirm-yes" class="cb-btn confirm-yes">CONFIRM</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- FIX dispatch modal -->
+      <div id="fix-modal" class="confirm-modal hidden" role="dialog">
+        <div class="confirm-card fix-card">
+          <div class="confirm-title fix-title">🔧 DISPATCH FIX</div>
+          <div class="confirm-body">
+            Ask the company to diagnose and patch <span class="target" id="fix-slug">—</span>.<br/>
+            PM will run DevOps smoke test → identify the broken file → send to the right engineer → re-validate.<br/><br/>
+            <label for="fix-input" class="fix-label">Optional bug description (helps PM focus):</label>
+            <textarea id="fix-input" rows="3"
+              placeholder="e.g. The page only shows a CSS comment, no real HTML"></textarea>
+          </div>
+          <div class="confirm-actions">
+            <button id="fix-cancel" class="cb-btn cb-btn-ghost">CANCEL</button>
+            <button id="fix-submit" class="cb-btn fix-submit">DISPATCH</button>
           </div>
         </div>
       </div>

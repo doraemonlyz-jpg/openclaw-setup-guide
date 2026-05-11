@@ -712,6 +712,65 @@ def api_project_run_tail(slug: str):
     })
 
 
+# ────────── Fix endpoint — ask PM to diagnose + repair ──────────
+
+@app.route("/api/projects/<slug>/fix", methods=["POST"])
+def api_project_fix(slug: str):
+    """Ask PM to enter FIX MODE for an existing project.
+
+    Spawns `openclaw agent --agent pm` in the background with a prompt
+    that triggers the FIX MODE workflow defined in PM's persona.
+    Optional body: {"description": "<boss's bug report>"}.
+    """
+    project = _project_path(slug)
+    if not project:
+        return jsonify({"error": "project not found"}), 404
+
+    body = request.get_json(silent=True) or {}
+    description = (body.get("description") or "").strip()
+
+    # Compose the prompt that flips PM into FIX MODE
+    parts = [
+        f"[FIX] Project `{slug}` is broken. Path: `{project}/`.",
+        "",
+        "Run the FIX MODE workflow defined in your AGENTS.md:",
+        "  1. Send DevOps a diagnose-only smoke test for that path (NO file modifications).",
+        "  2. Read the EVIDENCE; identify the file at fault from the failure pattern.",
+        "  3. Dispatch the right engineer with the literal EVIDENCE block.",
+        "  4. Verify the fix on disk; re-run DevOps gate; loop up to 3 fix rounds.",
+        "  5. Re-stamp STATUS.json with phase=complete + summary mentioning what was fixed.",
+        "  6. Reply to me with: what was broken, who fixed it, EVIDENCE it works now, how to verify.",
+        "",
+        "Do NOT rebuild from scratch — only patch the offending file(s).",
+    ]
+    if description:
+        parts.insert(1, f"Boss's bug report: \"{description}\"")
+        parts.insert(2, "")
+    msg = "\n".join(parts)
+
+    log_path = Path("/tmp") / f"fix-{slug}-{int(time.time())}.log"
+    try:
+        proc = subprocess.Popen(
+            ["openclaw", "agent", "--agent", "pm",
+             "--message", msg, "--thinking", "off"],
+            stdout=open(log_path, "w"), stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception as e:
+        return jsonify({"error": "spawn failed", "detail": str(e)}), 500
+
+    return jsonify({
+        "ok": True,
+        "pid": proc.pid,
+        "log": str(log_path),
+        "started_at": int(time.time()),
+        "slug": slug,
+        "description": description,
+        "message_preview": msg.split("\n")[0],
+    })
+
+
 # ────────── Delete endpoint ──────────
 
 @app.route("/api/projects/<slug>", methods=["DELETE"])
